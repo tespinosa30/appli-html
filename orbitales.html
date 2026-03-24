@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Structure Atomique : Haute Visibilité</title>
+    <style>
+        :root {
+            --bg: #000000;
+            --panel: rgba(15, 15, 20, 0.95);
+            --text: #e0e0e0;
+            --s-color: #ff0055; 
+            --p-color: #00ccff;
+        }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 15px; display: flex; justify-content: space-between; box-sizing: border-box; }
+        .panel { background: var(--panel); border: 1px solid #333; padding: 15px; border-radius: 8px; width: 280px; pointer-events: auto; display: flex; flex-direction: column; box-shadow: 0 4px 15px rgba(0,0,0,0.5); max-height: 95vh; overflow-y: auto; }
+        
+        .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 20px;}
+        .el { aspect-ratio: 1; background: #1a1a1a; border: 1px solid #333; color: #666; border-radius: 3px; cursor: pointer; display: grid; place-items: center; font-size: 0.8rem; font-weight: bold; transition:0.2s; }
+        .el:hover { background: white; color: black; }
+        .el.active { background: #00ccff; color: black; box-shadow: 0 0 10px rgba(0,204,255,0.4); border-color:white;}
+        
+        .row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+        .box { 
+            width: 32px; height: 32px; background: #111; border: 1px solid #555; 
+            display: flex; justify-content: center; align-items: center; gap: 2px; cursor: pointer; border-radius: 2px;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .box.s { border-bottom: 2px solid var(--s-color); }
+        .box.p { border-bottom: 2px solid var(--p-color); }
+        .box:hover { background: #222; border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.3); } 
+        
+        .arrow { font-weight: bold; font-size: 1.2rem; line-height: 1; display: inline-block; }
+        .u { color: #fff; }
+        .d { color: #aaa; }
+        
+        .btn { pointer-events: auto; background: #333; color: white; border: 1px solid #555; padding: 8px 18px; border-radius: 20px; cursor: pointer; margin: 0 5px; font-size:0.8rem; transition: 0.2s;}
+        .btn:hover { background: var(--p-color); color: black; }
+        #controls { position: absolute; bottom: 40px; width: 100%; text-align: center; pointer-events: none;}
+
+        .visibility-controls { margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; }
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+        .slider-row { margin-bottom: 12px; padding-left: 20px; display: flex; align-items: center; gap: 10px;}
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: #444; border-radius: 2px; outline: none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #ddd; cursor: pointer; transition: background .15s ease-in-out; }
+        input[type=range]::-webkit-slider-thumb:hover { background: #fff; transform: scale(1.2); }
+
+        .color-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; display:inline-block; }
+        
+        .switch { position: relative; display: inline-block; width: 34px; height: 18px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--active-col, #2196F3); }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        #credit { position: absolute; bottom: 10px; width: 100%; text-align: center; font-size: 0.75rem; color: #444; pointer-events: none; font-style: italic; }
+    </style>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    </script>
+</head>
+<body>
+    <div id="canvas-container" style="position:fixed; top:0; left:0; width:100%; height:100%;"></div>
+    
+    <div id="ui">
+        <div class="panel">
+            <h3 style="margin:0 0 10px 0; color:var(--p-color)">Tableau</h3>
+            <div id="grid" class="grid"></div>
+            
+            <div class="visibility-controls">
+                <div style="font-size:0.8rem; color:#888; margin-bottom:8px; font-weight:bold;">VISIBILITÉ & INTENSITÉ :</div>
+                
+                <!-- COUCHE S -->
+                <div class="toggle-row">
+                    <div style="display:flex; align-items:center;">
+                        <span class="color-dot" style="background:var(--s-color)"></span><span>Orbitales <strong>s</strong></span>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="app.toggleLayer('s', this.checked)"><span class="slider" style="--active-col: var(--s-color)"></span></label>
+                </div>
+                <div class="slider-row">
+                    <span style="font-size:0.7rem; color:#888;">Luminosité</span>
+                    <!-- Slider de 0.2 à 2.0 pour permettre un "boost" -->
+                    <input type="range" min="0.2" max="2.0" step="0.1" value="1.0" oninput="app.setIntensity('s', this.value)">
+                </div>
+                
+                <!-- COUCHE P -->
+                <div class="toggle-row">
+                    <div style="display:flex; align-items:center;">
+                        <span class="color-dot" style="background:var(--p-color)"></span><span>Orbitales <strong>p</strong></span>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="app.toggleLayer('p', this.checked)"><span class="slider" style="--active-col: var(--p-color)"></span></label>
+                </div>
+                <div class="slider-row">
+                    <span style="font-size:0.7rem; color:#888;">Luminosité</span>
+                    <input type="range" min="0.2" max="2.0" step="0.1" value="1.0" oninput="app.setIntensity('p', this.value)">
+                </div>
+
+                <!-- PARTICULES -->
+                <div class="toggle-row" style="margin-top:5px; border-top:1px dashed #333; padding-top:5px;">
+                    <div style="display:flex; align-items:center;">
+                        <span class="color-dot" style="background:white; box-shadow:0 0 5px white;"></span><span>Particules <strong>e⁻</strong></span>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="app.toggleParticles(this.checked)"><span class="slider" style="--active-col: #888"></span></label>
+                </div>
+                <div class="slider-row">
+                    <span style="font-size:0.7rem; color:#888;">Taille/Lum</span>
+                    <input type="range" min="0.5" max="2.0" step="0.1" value="1.0" oninput="app.setIntensity('particles', this.value)">
+                </div>
+
+                <div class="toggle-row" style="margin-top:10px; border-top:1px dashed #444; padding-top:10px;">
+                    <div style="display:flex; align-items:center;">
+                        <span style="font-size:1.2rem; margin-right:10px;">✛</span><span>Repère XYZ</span>
+                    </div>
+                    <label class="switch"><input type="checkbox" checked onchange="app.toggleAxes(this.checked)"><span class="slider" style="--active-col: #4caf50"></span></label>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3 style="margin:0 0 10px 0; color:var(--p-color)">Configuration</h3>
+            <div id="diag"></div>
+            <div style="margin-top:auto; text-align:center;">
+                <h1 id="sym" style="font-size:3.5rem; margin:0; line-height:1;">H</h1>
+                <div id="conf" style="font-family:monospace; color:var(--p-color); font-size:1.3rem;">1s¹</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button class="btn" onclick="app.reset()">Reset</button>
+        <button class="btn" onclick="app.toggleRot()">Rotation Auto</button>
+    </div>
+    <div id="credit">Espinosa T. Lycée Albert Einstein</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        function getCircleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32; canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            ctx.beginPath();
+            ctx.arc(16, 16, 15, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            return new THREE.CanvasTexture(canvas);
+        }
+        const circleTex = getCircleTexture();
+
+        function getProbPoint(n, l, m) {
+            let safety = 0;
+            while(safety++ < 50) {
+                if (l === 0) { 
+                    const maxR = n * 1.5; 
+                    const x = (Math.random()-0.5)*2; const y = (Math.random()-0.5)*2; const z = (Math.random()-0.5)*2;
+                    const mag = Math.sqrt(x*x + y*y + z*z);
+                    if (mag > 1 || mag < 0.01) continue; 
+                    const r = Math.pow(Math.random(), 1/3) * maxR;
+                    return new THREE.Vector3(x/mag*r, y/mag*r, z/mag*r);
+                } 
+                else if (l === 1) {
+                    const gap = 1.2; const len = n * 2.2; const t = Math.random(); const r = gap + t * len;
+                    const widthProfile = Math.pow(Math.sin(t * Math.PI), 0.25);
+                    const currentSpread = widthProfile * 2.0;
+                    const angle = Math.random() * Math.PI * 2; const rad = Math.sqrt(Math.random()) * currentSpread; 
+                    const dx = Math.cos(angle) * rad; const dz = Math.sin(angle) * rad;
+                    let dy = r; if(Math.random() > 0.5) dy = -dy; 
+                    const v = new THREE.Vector3(dx, dy, dz);
+                    if(m===0) v.applyAxisAngle(new THREE.Vector3(0,0,1), -Math.PI/2);
+                    if(m===2) v.applyAxisAngle(new THREE.Vector3(1,0,0), Math.PI/2);
+                    return v;
+                }
+            }
+            return new THREE.Vector3();
+        }
+
+        const DATA = [ {z:1,s:"H"}, {z:2,s:"He"}, {z:3,s:"Li"}, {z:4,s:"Be"}, {z:5,s:"B"}, {z:6,s:"C"}, {z:7,s:"N"}, {z:8,s:"O"}, {z:9,s:"F"}, {z:10,s:"Ne"}, {z:11,s:"Na"}, {z:12,s:"Mg"}, {z:13,s:"Al"}, {z:14,s:"Si"}, {z:15,s:"P"}, {z:16,s:"S"}, {z:17,s:"Cl"}, {z:18,s:"Ar"} ];
+        const SUBS = [ {id:'1s',n:1,l:0,cap:2}, {id:'2s',n:2,l:0,cap:2}, {id:'2p',n:2,l:1,cap:6}, {id:'3s',n:3,l:0,cap:2}, {id:'3p',n:3,l:1,cap:6} ];
+
+        class Viz {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x000000, 15, 60);
+                this.camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+                this.camera.position.set(10, 8, 14);
+                this.renderer = new THREE.WebGLRenderer({antialias:true});
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.rot = true;
+                
+                const light = new THREE.PointLight(0xffffff, 2.0, 100);
+                light.position.set(5, 8, 5);
+                this.scene.add(light);
+                this.scene.add(new THREE.AmbientLight(0x222222));
+                
+                this.axesHelper = new THREE.AxesHelper( 10 );
+                this.axesHelper.material.transparent = true;
+                this.axesHelper.material.opacity = 0.3; 
+                this.scene.add( this.axesHelper );
+
+                this.nucleusGroup = new THREE.Group();
+                this.scene.add(this.nucleusGroup);
+                this.nucleons = []; 
+
+                this.elecs = [];
+                // STOCKAGE REGLAGES : "intensity" contrôle opacité ET taille
+                this.settings = {
+                    s: { visible: true, intensity: 1.0 },
+                    p: { visible: true, intensity: 1.0 },
+                    particles: { visible: true, intensity: 1.0 }
+                };
+                
+                this.initUI();
+                this.load(6);
+                this.animate();
+                window.onresize = () => {
+                    this.camera.aspect = window.innerWidth/window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                };
+            }
+
+            updateNucleus(z) {
+                while(this.nucleusGroup.children.length > 0){ this.nucleusGroup.remove(this.nucleusGroup.children[0]); }
+                this.nucleons = [];
+                if (z === 0) return;
+                const nProtons = z;
+                const nNeutrons = z === 1 ? 0 : Math.ceil(z * 1.0); 
+                const geo = new THREE.SphereGeometry(0.06, 12, 12); 
+                const matProton = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.6, roughness: 0.3 });
+                const matNeutron = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x888888, emissiveIntensity: 0.2, roughness: 0.3 });
+                const totalParticles = nProtons + nNeutrons;
+                const confinementRadius = 0.07 * Math.pow(totalParticles, 1/3); 
+                for(let i=0; i<totalParticles; i++) {
+                    const isProton = i < nProtons;
+                    const mesh = new THREE.Mesh(geo, isProton ? matProton : matNeutron);
+                    const r = Math.pow(Math.random(), 1/3) * confinementRadius;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    mesh.position.setFromSphericalCoords(r, phi, theta);
+                    this.nucleusGroup.add(mesh);
+                    this.nucleons.push({ 
+                        mesh: mesh, radius: confinementRadius,
+                        target: new THREE.Vector3(mesh.position.x, mesh.position.y, mesh.position.z),
+                        speed: 0.1 + Math.random() * 0.1
+                    });
+                }
+            }
+
+            load(z) {
+                this.currentZ = z;
+                this.elecs.forEach(e => { this.scene.remove(e.cloudMesh); this.scene.remove(e.particleMesh); });
+                this.elecs = [];
+                this.updateNucleus(z);
+                let rem = z;
+                SUBS.forEach(s => {
+                    for(let i=0; i<s.cap/2; i++) { if(rem>0) { this.spawn(s,i,0.5); rem--; } }
+                    for(let i=0; i<s.cap/2; i++) { if(rem>0 && this.elecs.find(e=>e.s===s.id && e.b===i)) { this.spawn(s,i,-0.5); rem--; } }
+                });
+                this.update();
+            }
+
+            spawn(sub, box, spin) {
+                const count = sub.l===0 ? 1500 : 4000; 
+                const cloudGeo = new THREE.BufferGeometry();
+                const cloudPos = new Float32Array(count*3);
+                cloudGeo.setAttribute('position', new THREE.BufferAttribute(cloudPos, 3));
+                const col = sub.l===0 ? 0xff0055 : 0x00ccff;
+                const type = sub.l === 0 ? 's' : 'p';
+                
+                // CALCUL TAILLE/OPACITE INITIALE
+                // Base size 0.025, max size boost 0.05
+                const cloudSize = 0.025 * this.settings[type].intensity;
+                const cloudOp = Math.min(1, 0.8 * this.settings[type].intensity);
+                
+                const cloudMat = new THREE.PointsMaterial({
+                    color: col, size: cloudSize, transparent: true, 
+                    opacity: cloudOp, 
+                    blending: THREE.AdditiveBlending, sizeAttenuation: true
+                });
+                const cloudMesh = new THREE.Points(cloudGeo, cloudMat);
+                
+                // Particules e- : Base 3.5px, max boost 6px
+                const partSize = 3.5 * this.settings.particles.intensity;
+                const partOp = Math.min(1, 1.0 * this.settings.particles.intensity);
+
+                const partGeo = new THREE.BufferGeometry();
+                const partPos = new Float32Array(3);
+                partGeo.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
+                const partMat = new THREE.PointsMaterial({ 
+                    color: 0xffffff, size: partSize, map: circleTex, alphaTest: 0.5, 
+                    transparent: true, 
+                    opacity: partOp, 
+                    sizeAttenuation: false 
+                });
+                const partMesh = new THREE.Points(partGeo, partMat);
+
+                cloudMesh.visible = this.settings[type].visible;
+                partMesh.visible = this.settings.particles.visible;
+
+                this.scene.add(cloudMesh);
+                this.scene.add(partMesh);
+                
+                this.elecs.push({ 
+                    cloudMesh: cloudMesh, particleMesh: partMesh,
+                    cloudPos: cloudPos, partPos: partPos,
+                    n: sub.n, l: sub.l, m: box%3, s: sub.id, b: box, spin: spin, type: type,
+                    timer: Math.random() * 10 
+                });
+            }
+
+            // GESTION INTENSITÉ (TAILLE + OPACITÉ)
+            setIntensity(layerType, value) {
+                const val = parseFloat(value);
+                this.settings[layerType].intensity = val;
+                
+                this.elecs.forEach(e => {
+                    if (layerType === 'particles') {
+                        // Particules e- : Taille de 1.7px à 7px
+                        e.particleMesh.material.size = 3.5 * val;
+                        e.particleMesh.material.opacity = Math.min(1, val);
+                    } else if (e.type === layerType) {
+                        // Nuages : Taille de 0.01 à 0.05 (gros points)
+                        e.cloudMesh.material.size = 0.025 * val;
+                        // Opacité max 1
+                        if(e.cloudMesh.visible) {
+                            e.cloudMesh.material.opacity = Math.min(1, 0.8 * val);
+                        }
+                    }
+                });
+            }
+
+            highlight(subId, boxId = null) {
+                this.elecs.forEach(e => {
+                    const typeSettings = this.settings[e.type];
+                    if (subId === null) {
+                        if(typeSettings.visible) {
+                            e.cloudMesh.visible = true;
+                            // Rétablit l'intensité utilisateur
+                            e.cloudMesh.material.opacity = Math.min(1, 0.8 * typeSettings.intensity);
+                            if(this.settings.particles.visible) { 
+                                e.particleMesh.visible = true; 
+                                e.particleMesh.material.opacity = Math.min(1, this.settings.particles.intensity);
+                            }
+                        }
+                    } else {
+                        let match = (e.s === subId);
+                        if(boxId !== null && match) { match = (e.b === boxId); }
+
+                        if (match && typeSettings.visible) {
+                            e.cloudMesh.visible = true;
+                            e.cloudMesh.material.opacity = 1.0; 
+                            if(this.settings.particles.visible) {
+                                e.particleMesh.visible = true;
+                                e.particleMesh.material.opacity = 1.0;
+                            }
+                        } else {
+                            e.cloudMesh.material.opacity = 0.05; 
+                            e.particleMesh.visible = false; 
+                        }
+                    }
+                });
+            }
+
+            toggleLayer(type, isVisible) {
+                this.settings[type].visible = isVisible;
+                this.elecs.forEach(e => { if (e.type === type) e.cloudMesh.visible = isVisible; });
+            }
+
+            toggleParticles(isVisible) {
+                this.settings.particles.visible = isVisible;
+                this.elecs.forEach(e => { e.particleMesh.visible = isVisible; });
+            }
+
+            toggleAxes(isVisible) {
+                this.axesHelper.visible = isVisible;
+            }
+
+            update() {
+                const d = DATA.find(x=>x.z===this.elecs.length) || {s:"?"};
+                document.getElementById('sym').innerText = d.s;
+                const c = {};
+                this.elecs.forEach(e=>c[e.s]=(c[e.s]||0)+1);
+                let t = "";
+                SUBS.forEach(s=>{ if(c[s.id]) t+=`${s.id}<sup>${c[s.id]}</sup> `;});
+                document.getElementById('conf').innerHTML = t;
+                document.querySelectorAll('.el').forEach(b=>b.classList.toggle('active', parseInt(b.dataset.z)===this.currentZ));
+                document.querySelectorAll('.box').forEach(b=>{
+                    const es = this.elecs.filter(e=>e.s===b.dataset.s && e.b==b.dataset.b);
+                    es.sort((a,b)=>b.spin-a.spin);
+                    b.innerHTML = es.map(e=>`<span class="arrow ${e.spin>0?'u':'d'}">${e.spin>0?'↑':'↓'}</span>`).join('');
+                });
+            }
+
+            animate() {
+                requestAnimationFrame(()=>this.animate());
+                if(this.rot) this.scene.rotation.y += 0.003;
+                this.controls.update();
+                
+                this.nucleons.forEach(n => {
+                    const dist = n.mesh.position.distanceTo(n.target);
+                    if(dist < 0.02) {
+                        const r = Math.pow(Math.random(), 1/3) * n.radius;
+                        const theta = Math.random() * Math.PI * 2;
+                        const phi = Math.acos(2 * Math.random() - 1);
+                        n.target.setFromSphericalCoords(r, phi, theta);
+                    }
+                    n.mesh.position.lerp(n.target, n.speed);
+                });
+
+                this.elecs.forEach(e => {
+                    if(e.cloudMesh.visible && e.cloudMesh.material.opacity > 0.05) {
+                        const limit = Math.floor(e.cloudPos.length/3 * 0.1);
+                        for(let i=0; i<limit; i++) {
+                            const idx = Math.floor(Math.random()*(e.cloudPos.length/3));
+                            const v = getProbPoint(e.n, e.l, e.m);
+                            e.cloudPos[idx*3] = v.x; e.cloudPos[idx*3+1] = v.y; e.cloudPos[idx*3+2] = v.z;
+                        }
+                        e.cloudMesh.geometry.attributes.position.needsUpdate = true;
+                    }
+                    if(e.particleMesh.visible) {
+                        e.timer--;
+                        if(e.timer <= 0) {
+                            const v = getProbPoint(e.n, e.l, e.m);
+                            e.partPos[0] = v.x; e.partPos[1] = v.y; e.partPos[2] = v.z;
+                            e.particleMesh.geometry.attributes.position.needsUpdate = true;
+                            e.timer = 2 + Math.random() * 4; 
+                        }
+                    }
+                });
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            initUI() {
+                const g = document.getElementById('grid');
+                const mk = (z)=>{ const d=DATA.find(x=>x.z===z); const b=document.createElement('div'); b.className='el'; b.innerText=d.s; b.dataset.z=z; b.onclick=()=>this.load(z); g.appendChild(b); };
+                mk(1); for(let i=0;i<6;i++) g.appendChild(document.createElement('div')); mk(2); for(let i=3;i<=18;i++) mk(i);
+                
+                const dg = document.getElementById('diag');
+                SUBS.forEach(s=>{
+                    const r = document.createElement('div'); 
+                    r.className='row'; 
+                    const label = document.createElement('div');
+                    label.innerText = s.id;
+                    label.style.cssText = "width:20px; font-family:monospace; color:#888; font-weight:bold; cursor:help;";
+                    label.onmouseenter = () => this.highlight(s.id);
+                    label.onmouseleave = () => this.highlight(null);
+                    r.appendChild(label);
+
+                    for(let i=0; i<s.cap/2; i++){ 
+                        const b=document.createElement('div'); b.className=`box ${s.l===0?'s':'p'}`; 
+                        b.dataset.s=s.id; b.dataset.b=i; 
+                        b.onmouseenter = () => this.highlight(s.id, i);
+                        b.onmouseleave = () => this.highlight(null);
+                        b.onclick=()=>this.manual(s.id, i); 
+                        r.appendChild(b); 
+                    }
+                    dg.prepend(r);
+                });
+            }
+            toggleRot() { this.rot=!this.rot; }
+            reset() { this.load(0); }
+        }
+        window.app = new Viz();
+    </script>
+</body>
+</html>

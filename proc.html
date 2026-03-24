@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Ordonnancement (Stable)</title>
+    <style>
+        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --bg: #f4f6f8; --help: #8e44ad; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 95%; max-width: 1300px; margin-bottom: 40px; }
+        h3 { color: var(--primary); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px; }
+        
+        /* FOOTER */
+        .footer-credit { margin-top: auto; padding: 15px; color: #bdc3c7; font-size: 0.8em; text-align: center; font-style: italic; }
+
+        /* PANELS */
+        .control-panel { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 15px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
+        .panel-section { display: flex; gap: 10px; align-items: flex-end; border-right: 1px solid #ddd; padding-right: 20px; }
+        .panel-section:last-child { border-right: none; }
+        
+        .input-group { display: flex; flex-direction: column; }
+        label { font-size: 0.8em; font-weight: bold; margin-bottom: 4px; color: #555; }
+        input[type="number"], select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="number"] { width: 60px; }
+        select { font-weight: bold; color: var(--primary); width: 200px;}
+
+        /* BUTTONS */
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 5px; transition: all 0.2s; }
+        .btn-add { background: var(--accent); color: white; }
+        .btn-rand { background: #9b59b6; color: white; }
+        .btn-play { background: var(--success); color: white; }
+        .btn-step { background: var(--primary); color: white; }
+        .btn-reset { background: var(--danger); color: white; }
+        .btn-help { background: var(--help); color: white; border-radius: 50%; width: 30px; height: 30px; padding: 0; justify-content: center; font-size: 1.2em; font-weight: bold; margin-left: 10px; }
+        .btn-help:hover { transform: scale(1.1); }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 0; border-radius: 8px; width: 60%; max-width: 700px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); animation: slideDown 0.3s ease-out; }
+        .modal-header { padding: 15px 20px; background-color: var(--help); color: white; border-top-left-radius: 8px; border-top-right-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { margin: 0; font-size: 1.4em; }
+        .close-btn { color: white; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .modal-body { padding: 20px; line-height: 1.6; color: #444; }
+        @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* TABLES */
+        table.proc-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 0.9em; }
+        table.proc-table th { background: #f1f2f6; padding: 8px; text-align: left; }
+        table.proc-table td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+        
+        .param-header { background-color: #e8f6fd !important; border-bottom: 2px solid #3498db !important; padding: 10px !important; }
+        .param-container { display: flex; gap: 20px; align-items: center; }
+        .quantum-box { display: flex; align-items: center; gap: 5px; transition: opacity 0.3s; }
+        .quantum-box.hidden { opacity: 0.3; pointer-events: none; } 
+        .edit-input { width: 60px; padding: 4px; border: 1px solid transparent; background: transparent; }
+        .edit-input:focus { border-color: var(--accent); background: white; outline: none; }
+
+        /* STATS */
+        table.stats-table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 10px; border: 1px solid #ddd; }
+        table.stats-table th { background: #34495e; color: white; padding: 10px; text-align: center; }
+        table.stats-table td { padding: 8px; text-align: center; border-bottom: 1px solid #eee; }
+        table.stats-table tr:last-child { font-weight: bold; background-color: #f8f9fa; border-top: 2px solid #ccc; }
+        .stat-value { font-family: monospace; font-weight: bold; color: #2980b9; }
+
+        /* GANTT */
+        #gantt-wrapper { overflow-x: auto; padding: 20px; border: 1px solid #eee; background: #fff; margin-bottom: 20px; }
+        .gantt-bars { display: flex; height: 50px; }
+        .gantt-block { display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.9em; border-right: 1px solid rgba(255,255,255,0.5); box-sizing: border-box; }
+        .gantt-ruler { display: flex; height: 25px; margin-top: 5px; position: relative; }
+        .tick-mark { position: absolute; top: 0; width: 1px; height: 8px; background: #ccc; }
+        .tick-label { position: absolute; top: 10px; transform: translateX(-50%); font-size: 0.7em; color: #777; font-family: monospace; }
+
+        /* TRACE TABLE */
+        .trace-container { max-height: 500px; overflow-y: auto; border: 1px solid #ddd; }
+        table.trace-table { width: 100%; border-collapse: collapse; font-size: 0.9em; table-layout: fixed; }
+        table.trace-table th { position: sticky; top: 0; background: #2c3e50; color: white; z-index: 10; padding: 10px; text-align: center; }
+        table.trace-table td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: middle; height: 40px; }
+        table.trace-table tr.active-row { background: #e8f6fd; border-left: 4px solid var(--accent); }
+
+        /* WORKLOAD GRAPH */
+        #workload-wrapper { overflow-x: auto; padding: 15px; border: 1px solid #eee; background: #fff; margin-bottom: 20px; margin-top: 20px;}
+        .workload-container { position: relative; min-height: 150px; }
+        .wl-row { display: flex; align-items: center; height: 35px; border-bottom: 1px dashed #eee; margin-bottom: 5px; }
+        .wl-label { width: 50px; font-weight: bold; font-size: 0.9em; text-align: right; padding-right: 10px; flex-shrink: 0; }
+        .wl-track { position: relative; flex-grow: 1; height: 100%; border-left: 2px solid #ccc; }
+        .wl-block { position: absolute; height: 26px; top: 4px; display: flex; }
+        .wl-sub-block { flex: 1; border-right: 1px solid rgba(0,0,0,0.2); }
+        .wl-tick-mark { position: absolute; top: 0; width: 1px; height: 100%; background: #eee; z-index: 0; }
+        .wl-axis { display: flex; margin-left: 60px; height: 20px; border-top: 2px solid #ccc; position: relative; }
+        .wl-axis-tick { position: absolute; top: -5px; width: 1px; height: 10px; background: #999; }
+        .wl-axis-label { position: absolute; top: 5px; transform: translateX(-50%); font-size: 0.7em; color: #777; font-family: monospace; }
+
+        /* VISUALS */
+        .proc-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: white; font-weight: bold; font-size: 0.8em; margin: 0 2px; box-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
+        .tag-arrival { background: #ffeaa7; color: #d35400; padding: 2px 5px; border-radius: 3px; font-size: 0.8em; font-weight:bold; display:block; margin-bottom:2px;}
+        .tag-end { background: #fab1a0; color: #c0392b; padding: 2px 5px; border-radius: 3px; font-size: 0.8em; font-weight:bold; display:block;}
+        .queue-viz { display: flex; align-items: center; justify-content: flex-end; gap: 2px; min-height: 24px; }
+        .arrow-indicator { color: #95a5a6; font-size: 1.2em; margin-left: 5px; }
+        .empty-queue { color: #bdc3c7; font-style: italic; font-size: 0.8em; }
+
+        .col-time { width: 50px; text-align: center; font-weight: bold; color: #555; }
+        .col-queue { width: 30%; text-align: right; background-color: #fcfcfc; }
+        .col-cpu { width: 80px; text-align: center; border-left: 2px solid #ddd; border-right: 2px solid #ddd; background-color: #fff; }
+        .col-events { text-align: left; padding-left: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Simulateur d'Ordonnancement</h1>
+
+    <!-- PANNEAU CONTROLES -->
+    <div class="control-panel">
+        <div class="panel-section">
+            <div class="input-group"><label>Arrivée</label><input type="number" id="newArrival" value="0" min="0"></div>
+            <div class="input-group"><label>Durée</label><input type="number" id="newBurst" value="5" min="1"></div>
+            <button class="btn-add" onclick="addProcess()">Ajouter</button>
+            <button class="btn-rand" onclick="generateRandom()">🎲 Aléatoire (5)</button>
+        </div>
+        <div class="panel-section">
+            <button class="btn-play" id="btnPlay" onclick="togglePlay()">▶ Lecture</button>
+            <button class="btn-step" id="btnStep" onclick="stepForward()">⏯ Pas à pas</button>
+            <button class="btn-reset" onclick="resetSimulation()">↺ Reset</button>
+        </div>
+    </div>
+
+    <h3>1. Liste des Processus et Paramètres</h3>
+    <table class="proc-table" id="processTable">
+        <thead>
+            <tr>
+                <th colspan="5" class="param-header">
+                    <div class="param-container">
+                        <div class="input-group" style="flex-direction: row; align-items: center; gap: 5px;">
+                            <label for="algoSelect" style="font-size: 1em; white-space:nowrap;">Algorithme :</label>
+                            <select id="algoSelect" onchange="toggleQuantumVisibility(); resetSimulation()">
+                                <option value="RR">Round Robin (Tourniquet)</option>
+                                <option value="FCFS">FCFS / PAPS</option>
+                                <option value="SJF">SJF (Plus court d'abord)</option>
+                                <option value="SRT">SRT (Temps restant)</option>
+                            </select>
+                            <button class="btn-help" onclick="showHelp()" title="Explication de l'algorithme">?</button>
+                        </div>
+
+                        <!-- OPTIONS SUPPLEMENTAIRES (Quantum + Commutation) -->
+                        <div class="quantum-box" id="quantumBox">
+                            <label for="quantum">Quantum (q) = </label>
+                            <input type="number" id="quantum" value="2" min="1" onchange="resetSimulation()">
+                        </div>
+
+                        <div class="input-group" style="flex-direction: row; align-items: center; gap: 5px; margin-left: 20px; padding-left: 20px; border-left: 2px solid #ddd;">
+                            <label for="switchTime" style="white-space:nowrap;">Commutation :</label>
+                            <select id="switchTime" onchange="resetSimulation()" style="width:100px;">
+                                <option value="0">0 (Aucun)</option>
+                                <option value="1">1 tick</option>
+                            </select>
+                        </div>
+                    </div>
+                </th>
+            </tr>
+            <tr>
+                <th style="width: 50px;">PID</th>
+                <th>Temps d'Arrivée</th>
+                <th>Durée d'Exécution</th>
+                <th>Couleur</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="resultsArea" style="display:none;">
+        <h3>2. Vue d'ensemble des tâches (Chronogramme)</h3>
+        <div id="workload-wrapper">
+            <div id="workload-container" class="workload-container"></div>
+            <div id="workload-axis" class="wl-axis"></div>
+        </div>
+
+        <h3>3. Diagramme de Gantt (Exécution)</h3>
+        <div id="gantt-wrapper">
+            <div class="gantt-bars" id="ganttBars"></div>
+            <div class="gantt-ruler" id="ganttRuler"></div>
+        </div>
+
+        <h3>4. Trace (Tick par Tick)</h3>
+        <div class="trace-container" id="traceContainer">
+            <table class="trace-table">
+                <thead>
+                    <tr>
+                        <th class="col-time">t</th>
+                        <th>File d'attente (Avant)<br><small style="font-weight:normal; font-size:0.8em">Entrée ← Sortie (Prêt)</small></th>
+                        <th>CPU</th>
+                        <th>File d'attente (Après)<br><small style="font-weight:normal; font-size:0.8em">Entrée ← Sortie (Prêt)</small></th>
+                        <th>Événements</th>
+                    </tr>
+                </thead>
+                <tbody id="traceBody"></tbody>
+            </table>
+        </div>
+        <div id="statusMsg" style="margin-top:10px; color:#666;"></div>
+
+        <h3>5. Statistiques et Performances</h3>
+        <div id="switchWarning" style="display:none; background:#fff3cd; color:#856404; padding:8px; margin-bottom:10px; border-radius:4px; font-size:0.9em;">
+            ⚠️ <strong>Temps de commutation activé (1 tick).</strong> Les blocs gris rayés (OS) représentent le coût du changement de contexte.
+        </div>
+        <table class="stats-table" id="statsTable">
+            <thead>
+                <tr>
+                    <th>Processus</th>
+                    <th>Temps d'Arrivée</th>
+                    <th>Durée (Burst)</th>
+                    <th>Temps de Fin</th>
+                    <th>Temps de Séjour<br><small>(Fin - Arrivée)</small></th>
+                    <th>Temps d'Attente<br><small>(Séjour - Burst)</small></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot></tfoot>
+        </table>
+    </div>
+</div>
+
+<div class="footer-credit">
+    Espinosa T. Lycée Albert Einstein
+</div>
+
+<!-- FENETRE MODALE -->
+<div id="helpModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Info</h2>
+            <span class="close-btn" onclick="closeHelp()">&times;</span>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+    // --- AIDE ---
+    const algoDescriptions = {
+        "RR": `<strong>Round Robin (Tourniquet)</strong><br>Algo Préemptif. Chaque processus a droit à un temps CPU limité (Quantum). S'il ne finit pas, il retourne en fin de file. Idéal pour le temps partagé.`,
+        "FCFS": `<strong>FCFS (PAPS)</strong><br>Non-Préemptif. Premier Arrivé, Premier Servi. Simple mais sujet à l'effet de convoi (un gros processus bloque tout le monde).`,
+        "SJF": `<strong>SJF (Shortest Job First)</strong><br>Non-Préemptif. Choisit le processus le plus court. Minimise le temps d'attente moyen mais risque de famine pour les longs processus.`,
+        "SRT": `<strong>SRT (Shortest Remaining Time)</strong><br>Préemptif. Version dynamique de SJF. Si un nouveau processus arrive avec une durée inférieure au reste du processus en cours, il prend sa place.`
+    };
+
+    // --- VARIABLES ---
+    let processes = [];
+    let pidCounter = 1;
+    const colors = ['#e74c3c', '#3498db', '#9b59b6', '#f1c40f', '#2ecc71', '#e67e22', '#1abc9c', '#34495e'];
+    let simulationHistory = [];
+    let processStats = {};
+    let currentStep = 0;
+    let timerId = null;
+    let isPlaying = false;
+
+    class Process {
+        constructor(id, arrival, burst) {
+            this.id = id;
+            this.arrival = parseInt(arrival);
+            this.burst = parseInt(burst);
+            this.color = colors[(id - 1) % colors.length];
+        }
+    }
+
+    // --- GENERATEUR ALEATOIRE ---
+    function generateRandom() {
+        processes = [];
+        pidCounter = 1;
+        for(let i=0; i<5; i++) {
+            let arrival = Math.floor(Math.random() * 9);
+            let burst = Math.floor(Math.random() * 8) + 1;
+            processes.push(new Process(pidCounter++, arrival, burst));
+        }
+        processes.sort((a,b) => a.arrival - b.arrival);
+        processes.forEach((p, i) => { p.id = i+1; p.color = colors[i % colors.length]; });
+        pidCounter = 6;
+        renderTable();
+        resetSimulation();
+    }
+
+    // --- HELPERS ---
+    function showHelp() {
+        const algo = document.getElementById('algoSelect').value;
+        document.getElementById('modalTitle').innerText = algo;
+        document.getElementById('modalBody').innerHTML = algoDescriptions[algo];
+        document.getElementById('helpModal').style.display = "block";
+    }
+    function closeHelp() { document.getElementById('helpModal').style.display = "none"; }
+    window.onclick = function(e) { if(e.target == document.getElementById('helpModal')) closeHelp(); }
+
+    function addProcess() {
+        const at = parseInt(document.getElementById('newArrival').value);
+        const bt = parseInt(document.getElementById('newBurst').value);
+        if (isNaN(at) || isNaN(bt) || bt <= 0) return alert("Erreur");
+        processes.push(new Process(pidCounter++, at, bt));
+        renderTable();
+        resetSimulation();
+    }
+
+    function removeProcess(idx) { processes.splice(idx, 1); renderTable(); resetSimulation(); }
+    function updateProcess(idx, field, val) { const v=parseInt(val); if(!isNaN(v)) { processes[idx][field]=v; resetSimulation(); } }
+    function toggleQuantumVisibility() { 
+        const algo = document.getElementById('algoSelect').value;
+        document.getElementById('quantumBox').className = (algo === 'RR') ? 'quantum-box' : 'quantum-box hidden';
+    }
+
+    function renderTable() {
+        const tbody = document.querySelector('#processTable tbody');
+        tbody.innerHTML = '';
+        processes.forEach((p, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><strong>P${p.id}</strong></td>
+                <td><input type="number" class="edit-input" value="${p.arrival}" onchange="updateProcess(${i}, 'arrival', this.value)" min="0"></td>
+                <td><input type="number" class="edit-input" value="${p.burst}" onchange="updateProcess(${i}, 'burst', this.value)" min="1"></td>
+                <td><span style="display:inline-block;width:10px;height:10px;background:${p.color};"></span></td>
+                <td><button onclick="removeProcess(${i})" style="color:white;background:#e74c3c;padding:2px 6px;">X</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function generateQueueHtml(queueArray) {
+        if (queueArray.length === 0) return '<span class="empty-queue">Vide</span> <span class="arrow-indicator">→</span>';
+        let displayList = queueArray.slice().reverse();
+        let html = '<div class="queue-viz">';
+        displayList.forEach(p => { html += `<span class="proc-badge" style="background:${p.color}">P${p.id}</span>`; });
+        html += '<span class="arrow-indicator">→</span></div>';
+        return html;
+    }
+
+    // --- CHRONOGRAMME ---
+    function renderWorkloadGraph(maxTime) {
+        const container = document.getElementById('workload-container');
+        const axis = document.getElementById('workload-axis');
+        container.innerHTML = ''; axis.innerHTML = '';
+        const scale = 40;
+        const totalWidth = (maxTime + 2) * scale;
+        container.style.width = totalWidth + 'px'; axis.style.width = totalWidth + 'px';
+
+        for(let t=0; t<=maxTime+2; t++) {
+            let tk = document.createElement('div'); tk.className = 'wl-axis-tick'; tk.style.left = (t * scale) + 'px';
+            let lb = document.createElement('div'); lb.className = 'wl-axis-label'; lb.innerText = t; lb.style.left = (t * scale) + 'px';
+            axis.appendChild(tk); axis.appendChild(lb);
+        }
+
+        processes.forEach(p => {
+            let row = document.createElement('div'); row.className = 'wl-row';
+            let label = document.createElement('div'); label.className = 'wl-label'; label.innerText = `P${p.id}`;
+            row.appendChild(label);
+            let track = document.createElement('div'); track.className = 'wl-track';
+            for(let t=0; t<=maxTime+2; t++) {
+                let tm = document.createElement('div'); tm.className = 'wl-tick-mark'; tm.style.left = (t * scale) + 'px'; track.appendChild(tm);
+            }
+            let block = document.createElement('div'); block.className = 'wl-block';
+            block.style.left = (p.arrival * scale) + 'px'; block.style.width = (p.burst * scale) + 'px';
+            block.style.backgroundColor = p.color; block.style.border = '1px solid rgba(0,0,0,0.3)';
+            for(let i=0; i<p.burst; i++) {
+                let sub = document.createElement('div'); sub.className = 'wl-sub-block'; block.appendChild(sub);
+            }
+            track.appendChild(block); row.appendChild(track); container.appendChild(row);
+        });
+    }
+
+    function renderStatsTable() {
+        const tbody = document.querySelector('#statsTable tbody');
+        const tfoot = document.querySelector('#statsTable tfoot');
+        tbody.innerHTML = ''; tfoot.innerHTML = '';
+        
+        // Avertissement CS
+        const switchTime = parseInt(document.getElementById('switchTime').value);
+        document.getElementById('switchWarning').style.display = (switchTime > 0) ? 'block' : 'none';
+
+        let totalTurn=0, totalWait=0, count=0;
+        let sortedIds = Object.keys(processStats).sort((a,b)=>parseInt(a)-parseInt(b));
+        sortedIds.forEach(pid => {
+            const stats = processStats[pid];
+            const original = processes.find(p => p.id == pid);
+            if(!original) return;
+            const turn = stats.endTime - original.arrival;
+            const wait = turn - original.burst;
+            totalTurn+=turn; totalWait+=wait; count++;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><span class="proc-badge" style="background:${original.color}">P${pid}</span></td>
+                <td>${original.arrival}</td><td>${original.burst}</td><td class="stat-value">${stats.endTime}</td>
+                <td class="stat-value">${turn}</td><td class="stat-value">${wait}</td>`;
+            tbody.appendChild(tr);
+        });
+        
+        if(count>0) {
+            tfoot.innerHTML = `<tr><td colspan="4" style="text-align:right;">Moyennes :</td>
+                <td class="stat-value" style="color:#e67e22;">${(totalTurn/count).toFixed(2)}</td>
+                <td class="stat-value" style="color:#e67e22;">${(totalWait/count).toFixed(2)}</td></tr>`;
+        }
+    }
+
+    // --- MOTEUR SIMULATION ---
+    function runSimulationLogic() {
+        if (processes.length === 0) return null;
+        const algo = document.getElementById('algoSelect').value;
+        const quantum = parseInt(document.getElementById('quantum').value);
+        const switchTime = parseInt(document.getElementById('switchTime').value); // 0 ou 1
+        processStats = {};
+
+        let jobList = processes.map(p => ({
+            id: p.id, arrival: p.arrival, burst: p.burst, remaining: p.burst, color: p.color
+        })).sort((a,b) => a.arrival - b.arrival);
+
+        let history = [];
+        let time = 0;
+        let queue = [];
+        let cpu = null;
+        let qTimer = 0;
+        let completedCount = 0;
+        const totalJobs = jobList.length;
+        const MAX_TICKS = 500;
+        let pendingReinsertion = null; 
+        let lastCpuId = null; // Pour détecter le changement de contexte
+
+        while(completedCount < totalJobs && time < MAX_TICKS) {
+            let events = [];
+
+            if (pendingReinsertion) {
+                queue.push(pendingReinsertion);
+                pendingReinsertion = null;
+            }
+
+            let arrivals = jobList.filter(j => j.arrival === time);
+            arrivals.forEach(j => {
+                queue.push(j);
+                events.push(`<span class="tag-arrival">Arrivée P${j.id}</span>`);
+            });
+
+            // LOGIQUE DE TRI
+            if (algo === 'SJF' || algo === 'SRT') {
+                queue.sort((a, b) => {
+                    let critA = (algo === 'SJF') ? a.burst : a.remaining;
+                    let critB = (algo === 'SJF') ? b.burst : b.remaining;
+                    if (critA === critB) return a.arrival - b.arrival;
+                    return critA - critB;
+                });
+            }
+
+            // PREEMPTION SRT (Décision)
+            if (algo === 'SRT' && cpu) {
+                if (queue.length > 0 && queue[0].remaining < cpu.remaining) {
+                    pendingReinsertion = cpu;
+                    cpu = null;
+                    qTimer = 0;
+                }
+            }
+
+            // SNAPSHOT AVANT
+            let qPreSnap = queue.map(p => ({id: p.id, color: p.color}));
+
+            // --- LOGIQUE DE COMMUTATION (CONTEXT SWITCH) ---
+            // On regarde qui serait le candidat si on devait élire qqn maintenant
+            let candidate = (cpu !== null) ? cpu : (queue.length > 0 ? queue[0] : null);
+            
+            // Faut-il insérer un tick "OS" ?
+            // Condition : Option activée (1 tick) ET on a un candidat ET ce n'est pas le même que le tour d'avant ET le tour d'avant n'était pas vide (ou OS)
+            let needsSwitch = false;
+            
+            if (switchTime === 1 && candidate !== null && lastCpuId !== null && candidate.id !== lastCpuId) {
+                needsSwitch = true;
+            }
+
+            if (needsSwitch) {
+                // On insère un tick de commutation
+                history.push({
+                    time: time,
+                    cpuHtml: '<span style="color:#999; font-size:0.8em; font-weight:bold;">OS</span>',
+                    qPreHtml: generateQueueHtml(qPreSnap),
+                    qPostHtml: generateQueueHtml(qPreSnap), // La file ne bouge pas pendant le switch
+                    gantt: { pid: null, color: '#bdc3c7', isActive: false, isOS: true },
+                    events: ['<span style="color:#7f8c8d; font-size:0.8em;">Commutation</span>']
+                });
+                
+                // On reset lastCpuId pour que le prochain tick accepte le candidat
+                lastCpuId = null; 
+                time++;
+                continue; // On passe directement au tick suivant sans exécuter de processus
+            }
+
+            // --- ELECTION STANDARD ---
+            if (cpu === null && queue.length > 0) {
+                cpu = queue.shift();
+                qTimer = 0;
+            }
+
+            // Mise à jour du dernier CPU connu (pour le prochain tour)
+            if (cpu) lastCpuId = cpu.id;
+
+            let cpuHtml = cpu ? `<span class="proc-badge" style="background:${cpu.color}; transform:scale(1.2);">P${cpu.id}</span>` : `<span style="color:#bdc3c7; font-size:20px;">∅</span>`;
+            let ganttBlock = { pid: cpu ? cpu.id : null, color: cpu ? cpu.color : '#bdc3c7', isActive: !!cpu, isOS: false };
+
+            let finished = false;
+            let preempted = false;
+
+            if (cpu) {
+                cpu.remaining--; 
+                qTimer++;
+                if (cpu.remaining === 0) {
+                    finished = true;
+                    completedCount++;
+                    events.push(`<span class="tag-end">Fin P${cpu.id}</span>`);
+                    processStats[cpu.id] = { endTime: time + 1 };
+                } else if (algo === 'RR' && qTimer === quantum) {
+                    preempted = true;
+                }
+            }
+
+            if (finished) {
+                cpu = null;
+                qTimer = 0;
+                // Important: quand fini, on ne considère pas qu'on "tient" le CPU pour le switch suivant, 
+                // mais pour être logique avec "OS entre processus", on laisse lastCpuId tel quel.
+            } else if (preempted) {
+                pendingReinsertion = cpu;
+                cpu = null;
+                qTimer = 0;
+            }
+
+            let qPostSnap = queue.map(p => ({id: p.id, color: p.color}));
+
+            history.push({
+                time: time,
+                cpuHtml: cpuHtml,
+                qPreHtml: generateQueueHtml(qPreSnap),
+                qPostHtml: generateQueueHtml(qPostSnap),
+                gantt: ganttBlock,
+                events: events
+            });
+            time++;
+        }
+        return history;
+    }
+
+    // --- ANIMATION ---
+    function resetSimulation() {
+        pause();
+        currentStep = 0;
+        simulationHistory = [];
+        document.getElementById('ganttBars').innerHTML = '';
+        document.getElementById('ganttRuler').innerHTML = '';
+        document.getElementById('traceBody').innerHTML = '';
+        document.querySelector('#statsTable tbody').innerHTML = '';
+        document.querySelector('#statsTable tfoot').innerHTML = '';
+        document.getElementById('resultsArea').style.display = 'none';
+        document.getElementById('statusMsg').innerText = '';
+    }
+
+    function initData() {
+        if(simulationHistory.length === 0) {
+            const res = runSimulationLogic();
+            if(!res) return false;
+            simulationHistory = res;
+            
+            const totalTicks = simulationHistory.length;
+            const ruler = document.getElementById('ganttRuler');
+            ruler.innerHTML = '';
+            ruler.style.width = (totalTicks * 40) + 'px';
+            for(let t=0; t<=totalTicks; t++) {
+                let m = document.createElement('div'); m.className='tick-mark'; m.style.left=(t*40)+'px';
+                let l = document.createElement('div'); l.className='tick-label'; l.innerText=t; l.style.left=(t*40)+'px';
+                ruler.appendChild(m); ruler.appendChild(l);
+            }
+            
+            renderWorkloadGraph(totalTicks);
+            renderStatsTable();
+            document.getElementById('resultsArea').style.display = 'block';
+        }
+        return true;
+    }
+
+    function togglePlay() { isPlaying ? pause() : play(); }
+
+    function play() {
+        if(!initData()) return;
+        if(currentStep >= simulationHistory.length) return;
+        isPlaying = true;
+        document.getElementById('btnPlay').innerHTML = "❚❚ Pause";
+        document.getElementById('btnPlay').style.background = "#f39c12";
+        timerId = setInterval(() => { stepForward(); if(currentStep >= simulationHistory.length) pause(); }, 800);
+    }
+
+    function pause() {
+        isPlaying = false;
+        clearInterval(timerId);
+        document.getElementById('btnPlay').innerHTML = "▶ Lecture";
+        document.getElementById('btnPlay').style.background = "#27ae60";
+    }
+
+    function stepForward() {
+        if(!initData()) return;
+        if(currentStep >= simulationHistory.length) return;
+        
+        const step = simulationHistory[currentStep];
+        
+        const bars = document.getElementById('ganttBars');
+        const b = document.createElement('div');
+        b.className = 'gantt-block';
+        b.style.width = '40px';
+        
+        if (step.gantt.isOS) {
+            // Style pour la commutation (OS)
+            b.style.background = `repeating-linear-gradient(135deg, #bdc3c7, #bdc3c7 5px, #95a5a6 5px, #95a5a6 10px)`;
+            b.innerText = "OS";
+            b.style.color = "#fff";
+            b.style.fontSize = "0.8em";
+        } else if(step.gantt.isActive) {
+            b.style.background = step.gantt.color;
+            b.innerText = "P"+step.gantt.pid;
+        } else {
+            b.style.background = `repeating-linear-gradient(45deg, #f0f0f0, #f0f0f0 10px, #e0e0e0 10px, #e0e0e0 20px)`;
+            b.innerText = "∅"; b.style.color="#ccc";
+        }
+        bars.appendChild(b);
+        document.getElementById('gantt-wrapper').scrollLeft = bars.scrollWidth;
+
+        const tbody = document.getElementById('traceBody');
+        for(let r of tbody.children) r.classList.remove('active-row');
+        
+        const tr = document.createElement('tr');
+        tr.className = 'active-row';
+        tr.innerHTML = `
+            <td class="col-time">${step.time}</td>
+            <td class="col-queue">${step.qPreHtml}</td>
+            <td class="col-cpu">${step.cpuHtml}</td>
+            <td class="col-queue" style="text-align:left;">${step.qPostHtml}</td>
+            <td class="col-events">${step.events.join('')}</td>
+        `;
+        tbody.appendChild(tr);
+        document.getElementById('traceContainer').scrollTop = tbody.scrollHeight;
+
+        currentStep++;
+        document.getElementById('statusMsg').innerText = `Temps: ${currentStep} / ${simulationHistory.length}`;
+    }
+
+    window.onload = () => {
+        toggleQuantumVisibility();
+        processes.push(new Process(1, 0, 5));
+        processes.push(new Process(2, 1, 3));
+        processes.push(new Process(3, 3, 2));
+        processes.push(new Process(4, 5, 4));
+        pidCounter = 5;
+        renderTable();
+    };
+</script>
+</body>
+</html>

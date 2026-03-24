@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau d'Avancement Interactif</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --danger: #e74c3c;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --bg: #f4f7f6;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg);
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; height: 100vh; box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: var(--primary); margin: 0 0 15px 0; font-size: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .main-container { display: flex; gap: 20px; flex: 1; min-height: 0; }
+
+        /* GAUCHE */
+        .left-panel { flex: 0 0 55%; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        h2 { font-size: 1.1rem; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+
+        /* CONFIG */
+        .reaction-setup { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .species-group {
+            display: flex; align-items: center; gap: 5px; background: #f9f9f9; padding: 5px;
+            border-radius: 4px; border: 1px solid #eee;
+        }
+        .coeff-input, .amount-input { width: 50px; padding: 5px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+        .label-text { font-weight: bold; }
+        .btn-mini {
+            width: 24px; height: 24px; border: none; border-radius: 50%; cursor: pointer; color: white; font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-add { background: var(--success); }
+        .btn-rem { background: var(--danger); }
+
+        /* Styles désactivés pour feedback visuel */
+        .disabled-area { opacity: 0.6; pointer-events: none; filter: grayscale(0.5); }
+
+        /* TABLEAU */
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; text-align: center; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        .header-equation { background-color: white; color: black; font-size: 1.2rem; padding: 10px; border-bottom: 2px solid #333; }
+        .coeff-style { color: #e74c3c; font-weight: bold; }
+        .species-style { color: black; font-weight: bold; }
+        .sign-style { color: #555; font-weight: bold; }
+        .row-init { background-color: #eaf2f8; }
+        .row-literal { background-color: #fff8e1; font-style: italic; color: #666; font-size: 0.85rem; }
+        .row-progress { background-color: #fff; font-weight: bold; color: var(--accent); border: 2px solid var(--accent); }
+        .row-final { background-color: #eaeded; }
+        .cell-label { font-weight: bold; text-align: left; background: #f4f4f4; color: #333; width: 150px; border-right: 2px solid #ccc; }
+
+        /* DROITE */
+        .right-panel { flex: 1; display: flex; flex-direction: column; background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .chart-wrapper { position: relative; flex: 1; width: 100%; min-height: 0; margin-bottom: 4px; }
+
+        /* ANIMATION & SLIDER */
+        .anim-controls { display: flex; justify-content: center; gap: 15px; align-items: center; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .play-btn {
+            width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer; color: white;
+            font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .btn-play { background: var(--success); }
+        .btn-pause { background: var(--warning); }
+        .btn-reset { background: var(--primary); font-size: 1rem; width: 30px; height: 30px; }
+        .duration-input { width: 50px; padding: 4px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+        
+        .slider-wrapper { margin-top: 5px; }
+        input[type=range] { width: 100%; cursor: pointer; margin: 0; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: #666; margin-top: 2px; }
+
+        /* LEGENDE */
+        .legend-controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; justify-content: center; font-size: 0.85rem; }
+        .legend-item { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none;}
+        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+
+        footer { margin-top: 6px; font-size: 0.75rem; color: #aaa; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <h1>
+        <span>⚗️ Tableau d'Avancement & Évolution des Quantités</span>
+        <span style="font-size:0.8rem; color:#666;">Hypothèse : Réaction Totale</span>
+    </h1>
+
+    <div class="main-container">
+        <!-- GAUCHE -->
+        <div class="left-panel">
+            <div class="card" id="config-card">
+                <h2>1. Configuration de la Réaction</h2>
+                <div style="font-size:0.85rem; color:#666; margin-bottom:10px;">Format : Coeff. | Nom | n₀ (mol)</div>
+                <div class="reaction-setup" id="reactants-container"></div>
+                <div style="text-align:center; font-weight:bold; margin:5px 0; font-size:0.8rem; color:#aaa;">⬇️ donne ⬇️</div>
+                <div class="reaction-setup" id="products-container"></div>
+            </div>
+
+            <div class="card" style="overflow-x:auto; flex:1;">
+                <h2>2. Tableau d'Avancement (en mol)</h2>
+                <table id="advancement-table">
+                    <thead><tr id="row-equation"></tr></thead>
+                    <tbody>
+                        <tr class="row-init" id="row-init"></tr>
+                        <tr class="row-literal" id="row-lit"></tr>
+                        <tr class="row-progress" id="row-curr"></tr>
+                        <tr class="row-final" id="row-final"></tr>
+                    </tbody>
+                </table>
+                <div id="limitant-msg" style="margin-top:10px; color:var(--danger); font-weight:bold; font-size:0.9rem;"></div>
+            </div>
+        </div>
+
+        <!-- DROITE -->
+        <div class="right-panel">
+            <h2>3. Évolution des Quantités n = f(x)</h2>
+            
+            <div class="anim-controls">
+                <button id="reset-btn" class="play-btn btn-reset" onclick="resetAnimation()" title="Remettre à zéro">↺</button>
+                <button id="play-pause-btn" class="play-btn btn-play" onclick="togglePlayPause()" title="Lecture / Pause">▶</button>
+                <div style="display:flex; flex-direction:column; align-items:center; font-size:0.8rem; color:#555;">
+                    <label>Durée (s)</label>
+                    <input type="number" id="anim-duration" class="duration-input" value="10" min="1" max="60">
+                </div>
+            </div>
+
+            <div class="legend-controls" id="legend-container"></div>
+            <div class="chart-wrapper"><canvas id="myChart"></canvas></div>
+
+            <div class="slider-wrapper">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                    <span style="font-size:0.85rem; color:#333;">Avancement x</span>
+                    <span id="x-display" style="font-weight:bold; color:var(--accent); font-size:1rem;">0.00 mol</span>
+                </div>
+                <input type="range" id="x-slider" min="0" max="100" step="0.01" value="0" oninput="manualSliderChange(this.value)">
+                <div class="slider-labels">
+                    <span>0</span>
+                    <span>x_max = <span id="xmax-display" style="font-weight:bold;">?</span> mol</span>
+                </div>
+            </div>
+
+            <footer>Espinosa T. Lycée Albert Einstein</footer>
+        </div>
+    </div>
+
+<script>
+    // --- DATA ---
+    let reactants = [{ id: 'r1', name: 'R1', coeff: 1, n0: 2.0, color: '#e74c3c', visible: true }, { id: 'r2', name: 'R2', coeff: 2, n0: 3.0, color: '#e67e22', visible: true }];
+    let products = [{ id: 'p1', name: 'P1', coeff: 1, n0: 0.0, color: '#3498db', visible: true }];
+    let xMax = 0;
+    let chartInstance = null;
+    
+    let animState = {
+        isPlaying: false,
+        isStarted: false, // Nouvel état pour savoir si l'anim est en cours (même pausée)
+        startTime: 0,
+        elapsed: 0,
+        duration: 10000,
+        reqId: null
+    };
+
+    // --- DOM ---
+    const configCard = document.getElementById('config-card'); // Conteneur à verrouiller
+    const reactantsDiv = document.getElementById('reactants-container');
+    const productsDiv = document.getElementById('products-container');
+    const rowEquation = document.getElementById('row-equation');
+    const rowInit = document.getElementById('row-init');
+    const rowLit = document.getElementById('row-lit');
+    const rowCurr = document.getElementById('row-curr');
+    const rowFinal = document.getElementById('row-final');
+    const legendDiv = document.getElementById('legend-container');
+    const slider = document.getElementById('x-slider');
+    const xDisplay = document.getElementById('x-display');
+    const xmaxDisplay = document.getElementById('xmax-display');
+    const limitantMsg = document.getElementById('limitant-msg');
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    const durationInput = document.getElementById('anim-duration');
+
+    function formatNameHTML(name) { return name.replace(/(\d+)/g, '<sub>$1</sub>'); }
+
+    function init() { renderInputs(); updateSimulation(); }
+
+    // --- INPUTS ---
+    function renderInputs() {
+        const createHTML = (s, type, idx, tot) => `
+            <div class="species-group" style="border-left: 3px solid ${s.color}">
+                <input type="number" class="coeff-input" value="${s.coeff}" min="1" onchange="updateData('${type}', ${idx}, 'coeff', this.value)">
+                <span class="label-text">${formatNameHTML(s.name)}</span>
+                <input type="number" class="amount-input" value="${s.n0}" min="0" step="0.1" onchange="updateData('${type}', ${idx}, 'n0', this.value)">
+                <span style="font-size:0.8rem">mol</span>
+                ${tot > 1 ? `<button class="btn-mini btn-rem" onclick="removeSpecies('${type}', ${idx})">×</button>` : ''}
+            </div>
+            ${idx < tot - 1 ? '<span style="font-weight:bold; color:#999;">+</span>' : ''}
+        `;
+        let rHTML = ""; reactants.forEach((r, i) => rHTML += createHTML(r, 'reactant', i, reactants.length));
+        if (reactants.length < 3) rHTML += `<button class="btn-mini btn-add" onclick="addSpecies('reactant')">+</button>`;
+        reactantsDiv.innerHTML = rHTML;
+
+        let pHTML = ""; products.forEach((p, i) => pHTML += createHTML(p, 'product', i, products.length));
+        if (products.length < 3) pHTML += `<button class="btn-mini btn-add" onclick="addSpecies('product')">+</button>`;
+        productsDiv.innerHTML = pHTML;
+    }
+
+    function addSpecies(type) {
+        const arr = (type === 'reactant') ? reactants : products;
+        const id = (type === 'reactant') ? `R${arr.length + 1}` : `P${arr.length + 1}`;
+        const colors = ['#e74c3c', '#e67e22', '#f1c40f', '#3498db', '#9b59b6', '#1abc9c'];
+        let usedColors = [...reactants, ...products].map(s => s.color);
+        let nextColor = colors.find(c => !usedColors.includes(c)) || colors[0];
+        arr.push({ id: id.toLowerCase(), name: id, coeff: 1, n0: 0, color: nextColor, visible: true });
+        renderInputs(); updateSimulation();
+    }
+    function removeSpecies(type, index) {
+        const arr = (type === 'reactant') ? reactants : products;
+        arr.splice(index, 1); renderInputs(); updateSimulation();
+    }
+    function updateData(type, index, field, value) {
+        // Note: Cette fonction n'est plus appelée quand l'UI est désactivée, mais on garde une sécu
+        if(animState.isStarted) return; 
+        const arr = (type === 'reactant') ? reactants : products;
+        arr[index][field] = parseFloat(value) || 0;
+        updateSimulation();
+    }
+
+    // --- SIMULATION ---
+    function updateSimulation() {
+        let xPossible = reactants.map(r => r.n0 / r.coeff);
+        xMax = Math.min(...xPossible);
+        let limitants = [];
+        reactants.forEach(r => { if (Math.abs((r.n0 / r.coeff) - xMax) < 0.0001) limitants.push(r.name); });
+
+        if (xMax > 0) {
+            const limHTML = limitants.map(formatNameHTML).join(', ');
+            limitantMsg.innerHTML = `📍 Réactif(s) limitant(s) : ${limHTML}<br>🏁 Avancement maximal x<sub>max</sub> = ${xMax.toFixed(2)} mol`;
+        } else {
+            limitantMsg.innerHTML = "⚠️ Pas de réaction possible (n₀ = 0).";
+        }
+        
+        xmaxDisplay.textContent = xMax.toFixed(2);
+        slider.max = xMax > 0 ? xMax : 0.1;
+        
+        // Si pas d'anim, mode statique
+        if (!animState.isStarted && !animState.isPlaying) {
+             buildTableStructure();
+             updateTableValues(slider.value);
+             initChart(true);
+        }
+    }
+
+    // --- TABLEAU ---
+    function buildTableStructure() {
+        let htmlEq = `<th class="header-equation cell-label">Équation</th>`;
+        const fmtSpecies = (coeff, name) => `<span class="coeff-style">${coeff}</span> <span class="species-style">${formatNameHTML(name)}</span>`;
+        reactants.forEach((r, i) => {
+            htmlEq += `<th class="header-equation">${fmtSpecies(r.coeff, r.name)}</th>`;
+            if (i < reactants.length - 1) htmlEq += `<th class="header-equation sign-style">+</th>`;
+        });
+        htmlEq += `<th class="header-equation sign-style">→</th>`;
+        products.forEach((p, i) => {
+            htmlEq += `<th class="header-equation">${fmtSpecies(p.coeff, p.name)}</th>`;
+            if (i < products.length - 1) htmlEq += `<th class="header-equation sign-style">+</th>`;
+        });
+        rowEquation.innerHTML = htmlEq;
+    }
+
+    function updateTableValues(x) {
+        x = parseFloat(x);
+        const emptyCell = `<td style="border:none; background:transparent;"></td>`;
+        let htmlInit = '<td class="cell-label">État Initial (x = 0)</td>';
+        reactants.forEach((r, i) => htmlInit += `<td>${r.n0}</td>` + (i < reactants.length-1 ? emptyCell : ''));
+        htmlInit += emptyCell; products.forEach((p, i) => htmlInit += `<td>${p.n0}</td>` + (i < products.length-1 ? emptyCell : ''));
+        rowInit.innerHTML = htmlInit;
+
+        let htmlLit = '<td class="cell-label">En cours (x)<br><small>Expression</small></td>';
+        reactants.forEach((r, i) => htmlLit += `<td>${(r.coeff===1 ? `${r.n0}-x` : `${r.n0}-${r.coeff}x`)}</td>` + (i < reactants.length-1 ? emptyCell : ''));
+        htmlLit += emptyCell; products.forEach((p, i) => htmlLit += `<td>${(p.n0>0?`${p.n0}+`:'') + (p.coeff===1?'x':`${p.coeff}x`)}</td>` + (i < products.length-1 ? emptyCell : ''));
+        rowLit.innerHTML = htmlLit;
+
+        let htmlCurr = '<td class="cell-label">En cours (x)<br><small>Valeurs (mol)</small></td>';
+        reactants.forEach((r, i) => htmlCurr += `<td>${Math.max(0, r.n0 - r.coeff * x).toFixed(2)}</td>` + (i < reactants.length-1 ? emptyCell : ''));
+        htmlCurr += emptyCell; products.forEach((p, i) => htmlCurr += `<td>${(p.n0 + p.coeff * x).toFixed(2)}</td>` + (i < products.length-1 ? emptyCell : ''));
+        rowCurr.innerHTML = htmlCurr;
+
+        let htmlFinal = '<td class="cell-label">État Final (x_max)</td>';
+        reactants.forEach((r, i) => {
+            let val = Math.max(0, r.n0 - r.coeff * xMax);
+            let style = (val < 0.001) ? 'color:red; font-weight:bold;' : '';
+            htmlFinal += `<td style="${style}">${val.toFixed(2)}</td>` + (i < reactants.length-1 ? emptyCell : '');
+        });
+        htmlFinal += emptyCell; products.forEach((p, i) => htmlFinal += `<td>${(p.n0 + p.coeff * xMax).toFixed(2)}</td>` + (i < products.length-1 ? emptyCell : ''));
+        rowFinal.innerHTML = htmlFinal;
+        xDisplay.textContent = x.toFixed(2) + " mol";
+    }
+
+    function manualSliderChange(val) {
+        // Si l'anim est en cours, on la met en pause si l'utilisateur touche le slider
+        if (animState.isPlaying) pauseAnimation();
+        updateTableValues(val);
+        updateChartMarker(val);
+    }
+
+    // --- ANIMATION ---
+    function togglePlayPause() {
+        if (xMax <= 0) return;
+        if (animState.isPlaying) pauseAnimation(); else startAnimation();
+    }
+
+    function startAnimation() {
+        const d = parseInt(durationInput.value) || 10;
+        animState.duration = d * 1000;
+        
+        // Si on redémarre depuis la fin
+        if (parseFloat(slider.value) >= xMax) {
+            animState.elapsed = 0; slider.value = 0;
+        }
+        
+        // Si démarrage initial (pas reprise de pause)
+        if (animState.elapsed === 0) {
+            chartInstance.data.datasets.forEach(ds => ds.data = []);
+            chartInstance.update();
+        }
+
+        animState.isPlaying = true;
+        animState.isStarted = true; // Marqueur que l'anim est active
+        animState.startTime = performance.now() - animState.elapsed;
+        
+        playPauseBtn.textContent = "⏸"; playPauseBtn.className = "play-btn btn-pause";
+        lockInterface(true); // VERROUILLAGE
+        
+        loop();
+    }
+
+    function pauseAnimation() {
+        animState.isPlaying = false;
+        cancelAnimationFrame(animState.reqId);
+        playPauseBtn.textContent = "▶"; playPauseBtn.className = "play-btn btn-play";
+        // On reste verrouillé car l'anim n'est pas finie, juste en pause
+    }
+
+    function resetAnimation() {
+        animState.isPlaying = false;
+        animState.isStarted = false;
+        cancelAnimationFrame(animState.reqId);
+        animState.elapsed = 0;
+        slider.value = 0;
+        
+        playPauseBtn.textContent = "▶"; playPauseBtn.className = "play-btn btn-play";
+        lockInterface(false); // DEVERROUILLAGE
+        
+        updateTableValues(0);
+        updateSimulation(); // Retour mode statique
+    }
+
+    function lockInterface(locked) {
+        // Désactive/Active la zone de config
+        if(locked) {
+            configCard.classList.add('disabled-area');
+            // Désactiver aussi les checkboxes de légende
+            legendDiv.classList.add('disabled-area'); 
+        } else {
+            configCard.classList.remove('disabled-area');
+            legendDiv.classList.remove('disabled-area');
+        }
+    }
+
+    function loop(timestamp) {
+        if (!animState.isPlaying) return;
+        const now = performance.now();
+        animState.elapsed = now - animState.startTime;
+        let pct = animState.elapsed / animState.duration;
+        if (pct > 1) pct = 1;
+
+        const currentX = pct * xMax;
+        slider.value = currentX;
+        updateTableValues(currentX);
+
+        let dsIndex = 0;
+        reactants.forEach(r => {
+            chartInstance.data.datasets[dsIndex].data.push({x: currentX, y: Math.max(0, r.n0 - r.coeff * currentX)});
+            dsIndex++;
+        });
+        products.forEach(p => {
+            chartInstance.data.datasets[dsIndex].data.push({x: currentX, y: p.n0 + p.coeff * currentX});
+            dsIndex++;
+        });
+        chartInstance.update('none');
+
+        if (pct < 1) animState.reqId = requestAnimationFrame(loop); else {
+            // Fin de l'anim
+            animState.isPlaying = false;
+            playPauseBtn.textContent = "▶"; playPauseBtn.className = "play-btn btn-play";
+            // On déverrouille à la fin ? 
+            // Choix ergonomique : soit on laisse l'utilisateur voir le résultat, soit on reset.
+            // Mieux vaut laisser l'utilisateur cliquer sur Reset ou toucher le slider pour reprendre la main complètement
+            // Mais on peut déverrouiller la config maintenant.
+            lockInterface(false);
+            animState.isStarted = false; // Anim considérée finie
+        }
+    }
+
+    // --- GRAPHIQUE ---
+    function initChart(isFullStatic = false) {
+        const ctx = document.getElementById('myChart').getContext('2d');
+        let datasets = [];
+        
+        [...reactants, ...products].forEach(s => {
+            datasets.push({
+                label: s.name,
+                borderColor: s.color,
+                backgroundColor: s.color,
+                data: [],
+                fill: false,
+                pointRadius: 0,
+                borderWidth: 2,
+                tension: 0.1,
+                showLine: true,
+                hidden: !s.visible
+            });
+        });
+
+        if (isFullStatic && xMax > 0) {
+            const steps = 100;
+            for (let i = 0; i <= steps; i++) {
+                let x = (xMax / steps) * i;
+                let dsIndex = 0;
+                reactants.forEach(r => { datasets[dsIndex].data.push({x: x, y: Math.max(0, r.n0 - r.coeff * x)}); dsIndex++; });
+                products.forEach(p => { datasets[dsIndex].data.push({x: x, y: p.n0 + p.coeff * x}); dsIndex++; });
+            }
+        }
+
+        renderLegend(datasets);
+        if (chartInstance) chartInstance.destroy();
+
+        const verticalLinePlugin = {
+            id: 'verticalLine',
+            afterDraw: (chart) => {
+                const xValue = parseFloat(slider.value) || 0;
+                const xScale = chart.scales.x;
+                const yScale = chart.scales.y;
+                const xPixel = xScale.getPixelForValue(xValue);
+                if (xPixel >= xScale.left && xPixel <= xScale.right) {
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(xPixel, yScale.top);
+                    ctx.lineTo(xPixel, yScale.bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#555';
+                    ctx.setLineDash([5, 5]);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        chartInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                scales: {
+                    x: { type: 'linear', title: { display: true, text: 'Avancement x (mol)' }, min: 0, max: xMax > 0 ? xMax : 1 },
+                    y: { title: { display: true, text: 'Quantité n (mol)' }, beginAtZero: true }
+                }
+            },
+            plugins: [verticalLinePlugin]
+        });
+    }
+
+    function updateChartMarker(val) { if(chartInstance) chartInstance.draw(); }
+
+    function renderLegend(datasets) {
+        const displayLabels = [...reactants.map(r => formatNameHTML(r.name)), ...products.map(p => formatNameHTML(p.name))];
+        let html = "";
+        datasets.forEach((ds, i) => {
+            const isChecked = !ds.hidden; 
+            html += `
+                <div class="legend-item" onclick="toggleDataset(event, ${i})">
+                    <input type="checkbox" id="cb-ds-${i}" ${isChecked ? 'checked' : ''}>
+                    <div class="color-box" style="background:${ds.borderColor}"></div>
+                    <span>${displayLabels[i]}</span>
+                </div>
+            `;
+        });
+        legendDiv.innerHTML = html;
+    }
+
+    function toggleDataset(e, index) {
+        if(animState.isStarted && animState.isPlaying) return; // Bloquer clic légende si anim
+        
+        if (e.target.tagName !== 'INPUT') {
+            const cb = document.getElementById(`cb-ds-${index}`);
+            cb.checked = !cb.checked;
+        }
+        
+        if (index < reactants.length) {
+            reactants[index].visible = !reactants[index].visible;
+        } else {
+            products[index - reactants.length].visible = !products[index - reactants.length].visible;
+        }
+
+        const cb = document.getElementById(`cb-ds-${index}`);
+        chartInstance.data.datasets[index].hidden = !cb.checked;
+        chartInstance.update();
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>

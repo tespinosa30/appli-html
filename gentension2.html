@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Induction : Labo Complet (Flux + Tension)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #dfe6e9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            user-select: none;
+        }
+
+        h2 { color: #2d3436; margin: 10px 0 20px 0; }
+
+        .canvas-container {
+            background: #fff;
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        canvas {
+            border: 1px solid #b2bec3;
+            border-radius: 8px;
+            background: radial-gradient(circle at 30% 50%, #f7f9fa 0%, #ecf0f1 100%);
+            cursor: default;
+        }
+
+        .controls {
+            margin-top: 15px;
+            background: white;
+            padding: 15px 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 900px;
+        }
+
+        .control-col { display: flex; flex-direction: column; gap: 5px; }
+        
+        /* Sliders stylisés */
+        input[type=range] { height: 6px; border-radius: 5px; cursor: pointer; }
+        
+        /* Checkboxes stylisées */
+        .toggle-btn {
+            display: flex; align-items: center; gap: 8px; 
+            font-size: 0.9rem; cursor: pointer;
+            background: #f1f2f6; padding: 6px 12px; border-radius: 20px;
+            border: 1px solid transparent; transition: all 0.2s;
+        }
+        .toggle-btn:hover { border-color: #b2bec3; }
+        .toggle-btn input { cursor: pointer; }
+
+        /* Boutons d'action */
+        .btn-action {
+            padding: 8px 20px;
+            color: white; border: none; border-radius: 20px;
+            cursor: pointer; font-weight: bold; font-size: 0.95rem;
+            min-width: 100px;
+        }
+        .btn-reset { background: #d63031; }
+        .btn-pause { background: #0984e3; }
+        .btn-pause.paused { background: #fdcb6e; color: #2d3436; }
+
+        label { font-weight: 700; color: #636e72; font-size: 0.85rem; }
+        
+        .scope-legend {
+            position: absolute; top: 115px; right: 55px;
+            background: rgba(45, 52, 54, 0.9);
+            padding: 5px 10px; border-radius: 4px;
+            font-size: 0.75rem; color: #fff;
+            border: 1px solid #636e72;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+    </style>
+</head>
+<body>
+
+    <h2>TP Virtuel : Induction, Flux et Loi de Faraday</h2>
+
+    <div class="canvas-container">
+        <canvas id="mainCanvas" width="900" height="500"></canvas>
+        
+        <!-- Légende flottante sur l'oscilloscope -->
+        <div class="scope-legend">
+            <div class="legend-item"><div class="dot" style="background:#00cec9"></div> Tension (e)</div>
+            <div class="legend-item"><div class="dot" style="background:#fdcb6e"></div> Flux (Φ)</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <!-- Vitesse -->
+        <div class="control-col">
+            <label>Vitesse Aimant (ω)</label>
+            <input type="range" id="speedSlider" min="0" max="20" value="4" step="0.5" style="width:140px">
+        </div>
+
+        <!-- Spires -->
+        <div class="control-col">
+            <label>Nombre de Spires (N)</label>
+            <input type="range" id="turnsSlider" min="5" max="30" value="15" step="1" style="width:140px">
+        </div>
+
+        <!-- Options Visuelles -->
+        <div class="toggle-btn">
+            <input type="checkbox" id="checkField" checked>
+            <label for="checkField">Dipôles</label>
+        </div>
+        <div class="toggle-btn">
+            <input type="checkbox" id="checkVector" checked>
+            <label for="checkVector" style="color:#00b894">Vecteur B</label>
+        </div>
+        <div class="toggle-btn">
+            <input type="checkbox" id="checkFluxTrace" checked>
+            <label for="checkFluxTrace" style="color:#e1b12c">Trace Flux</label>
+        </div>
+
+        <!-- Actions -->
+        <button id="pauseBtn" class="btn-action btn-pause" onclick="togglePause()">Pause</button>
+        <button class="btn-action btn-reset" onclick="resetLab()">Reset</button>
+    </div>
+
+<script>
+/**
+ * SIMULATION V9 - ULTIMATE
+ * Ajouts : Flux Graph, Variable Turns, Pause
+ */
+
+const cvs = document.getElementById('mainCanvas');
+const ctx = cvs.getContext('2d');
+
+// --- CONFIGURATION ---
+const SCENE = {
+    magnet: { w: 100, h: 34 },
+    coilBase: { x: 450, y: 250, r: 40, width: 80 }, // Spires dynamiques
+    scope: { x: 580, y: 80, w: 300, h: 340 }, 
+    physics: { strength: 60000, gain: 250 } // Gain ajusté car N est maintenant multiplicateur
+};
+
+// --- ÉTAT ---
+let state = {
+    mag: { x: 250, y: 250, angle: 0 },
+    speed: 0.04,
+    nbTurns: 15,
+    lastFlux: 0,
+    
+    // UI
+    isDragging: false,
+    isPaused: false,
+    hasInteracted: false,
+    dragOff: {x:0, y:0},
+    
+    // Options
+    showField: true,
+    showVector: true,
+    showFluxTrace: true,
+    
+    // Buffers Oscillo
+    traceVoltage: new Array(230).fill(0), // Bleu
+    traceFlux: new Array(230).fill(0),    // Jaune
+    
+    time: 0
+};
+
+// --- PHYSIQUE ---
+
+function getFieldAt(x, y) {
+    let dx = x - state.mag.x;
+    let dy = y - state.mag.y;
+    let distSq = dx*dx + dy*dy;
+    let dist = Math.sqrt(distSq);
+    if(dist < 20) dist = 20;
+
+    let mx = Math.cos(state.mag.angle);
+    let my = Math.sin(state.mag.angle);
+
+    let k = SCENE.physics.strength / (distSq * dist);
+    let dot = mx*dx + my*dy;
+
+    return {
+        x: k * (3 * dot * dx/distSq - mx),
+        y: k * (3 * dot * dy/distSq - my)
+    };
+}
+
+function update() {
+    if(state.isPaused && !state.isDragging) return; // Stop si pause (sauf si drag manuel)
+
+    state.time += 0.05;
+
+    // 1. Rotation Aimant
+    if(!state.isDragging) {
+        state.mag.angle += state.speed;
+    }
+
+    // 2. Calcul du Flux Phi
+    let b = getFieldAt(SCENE.coilBase.x, SCENE.coilBase.y);
+    // Flux Phi approx = B_x * Surface * N (mais ici on sort N pour le calcul de e)
+    // Pour la trace jaune (Flux unitaire), on affiche juste -B.x
+    let fluxUnit = -b.x; 
+
+    // 3. Loi de Faraday : e = -N * dPhi/dt
+    let dFlux = fluxUnit - state.lastFlux;
+    state.lastFlux = fluxUnit;
+    
+    // Tension = dFlux * Gain * Nombre de Spires
+    let voltage = dFlux * SCENE.physics.gain * state.nbTurns;
+    
+    // Flux pour affichage (mise à l'échelle pour l'écran)
+    let fluxDisplay = fluxUnit * 800; // Echelle arbitraire pour visibilité
+
+    // Saturation
+    if(voltage > 100) voltage = 100; if(voltage < -100) voltage = -100;
+    if(fluxDisplay > 100) fluxDisplay = 100; if(fluxDisplay < -100) fluxDisplay = -100;
+
+    // Mise à jour Buffers
+    state.traceVoltage.push(voltage);
+    state.traceVoltage.shift();
+    
+    state.traceFlux.push(fluxDisplay);
+    state.traceFlux.shift();
+}
+
+// --- DESSIN ---
+
+function drawMagnet() {
+    ctx.save();
+    ctx.translate(state.mag.x, state.mag.y);
+    ctx.rotate(state.mag.angle);
+    
+    let w = SCENE.magnet.w;
+    let h = SCENE.magnet.h;
+
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = "#e74c3c"; ctx.fillRect(0, -h/2, w/2, h);
+    ctx.fillStyle = "#2980b9"; ctx.fillRect(-w/2, -h/2, w/2, h);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "white"; ctx.font = "bold 16px Arial";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("N", w/4, 0); ctx.fillText("S", -w/4, 0);
+    ctx.restore();
+}
+
+function drawCoil() {
+    let c = SCENE.coilBase;
+    let n = state.nbTurns;
+    
+    // Label dynamique
+    ctx.fillStyle = "#636e72";
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`Bobine (${n} spires)`, c.x, c.y + c.r + 35);
+
+    // Dessin dynamique des spires
+    // La bobine garde la même largeur totale, mais les spires se serrent
+    let step = c.width / n;
+    let grad = ctx.createLinearGradient(0, c.y - c.r, 0, c.y + c.r);
+    grad.addColorStop(0, "#6d4c41");
+    grad.addColorStop(0.5, "#e17055");
+    grad.addColorStop(1, "#6d4c41");
+
+    for(let k=0; k<n; k++) {
+        let cx = (c.x - c.width/2) + k*step + step/2;
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = "rgba(0,0,0,0.15)";
+        ctx.beginPath();
+        // Épaisseur fil dépend du nombre de spires (plus y'en a, plus c'est fin)
+        let wSpire = Math.max(2, step * 0.8); 
+        ctx.ellipse(cx, c.y, wSpire/2, c.r, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+    }
+}
+
+function drawOscilloscope() {
+    let s = SCENE.scope;
+    
+    // Boitier
+    ctx.fillStyle = "#b2bec3"; ctx.fillRect(s.x, s.y, s.w, s.h);
+    ctx.strokeStyle = "#636e72"; ctx.lineWidth = 2; ctx.strokeRect(s.x, s.y, s.w, s.h);
+
+    // Titre
+    ctx.fillStyle = "#636e72"; ctx.font = "bold 16px Arial"; ctx.textAlign = "center";
+    ctx.fillText("OSCILLOSCOPE", s.x + s.w/2, s.y + 290);
+
+    // Écran
+    let sx = s.x + 50; let sy = s.y + 30;
+    let sw = 230; let sh = 200;
+    
+    ctx.fillStyle = "#2d3436"; ctx.fillRect(sx, sy, sw, sh);
+    ctx.strokeRect(sx, sy, sw, sh);
+
+    // Grille
+    ctx.strokeStyle = "#636e72"; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.moveTo(sx, sy + sh/2); ctx.lineTo(sx+sw, sy + sh/2); 
+    ctx.moveTo(sx + sw/2, sy); ctx.lineTo(sx+sw/2, sy + sh); 
+    ctx.stroke();
+
+    // --- TRACES ---
+    ctx.save();
+    ctx.beginPath(); ctx.rect(sx, sy, sw, sh); ctx.clip();
+    
+    // 1. Trace Flux (Jaune) - Dessinée en premier (arrière plan)
+    if(state.showFluxTrace) {
+        ctx.strokeStyle = "rgba(253, 203, 110, 0.6)"; // Jaune semi-transparent
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]); // Pointillés pour distinguer
+        ctx.beginPath();
+        let xStep = sw / state.traceFlux.length;
+        for(let i=0; i < state.traceFlux.length; i++) {
+            let px = sx + i * xStep;
+            let py = (sy + sh/2) - state.traceFlux[i];
+            if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset
+    }
+
+    // 2. Trace Tension (Bleu/Cyan) - Premier plan
+    ctx.strokeStyle = "#00cec9"; 
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#00cec9"; ctx.shadowBlur = 5;
+    ctx.beginPath();
+    let xStep = sw / state.traceVoltage.length;
+    for(let i=0; i < state.traceVoltage.length; i++) {
+        let px = sx + i * xStep;
+        let py = (sy + sh/2) - state.traceVoltage[i];
+        if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    
+    ctx.restore();
+
+    // Connecteurs
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#d63031"; ctx.beginPath(); ctx.arc(s.x + 25, s.y + 120, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#2d3436"; ctx.beginPath(); ctx.arc(s.x + 25, s.y + 200, 8, 0, Math.PI*2); ctx.fill();
+}
+
+// --- FONCTIONS SECONDAIRES (Dessin Fils, B, Hint, etc.) ---
+// Identiques V8 mais résumées pour gain de place
+function drawWires() {
+    let c = SCENE.coilBase; let s = SCENE.scope;
+    ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.strokeStyle = "#ff7675"; ctx.beginPath(); 
+    ctx.moveTo(c.x + c.width/2, c.y - c.r + 5); 
+    ctx.bezierCurveTo(c.x + 80, c.y - c.r, s.x - 40, s.y + 120, s.x + 25, s.y + 120); ctx.stroke();
+    ctx.strokeStyle = "#2d3436"; ctx.beginPath(); 
+    ctx.moveTo(c.x + c.width/2, c.y + c.r - 5); 
+    ctx.bezierCurveTo(c.x + 80, c.y + c.r, s.x - 40, s.y + 200, s.x + 25, s.y + 200); ctx.stroke();
+}
+function drawGreenVector() {
+    if(!state.showVector) return;
+    let b = getFieldAt(SCENE.coilBase.x, SCENE.coilBase.y);
+    let scale = 5000; let cx = SCENE.coilBase.x; let cy = SCENE.coilBase.y;
+    let ex = cx + b.x * scale; let ey = cy + b.y * scale;
+    ctx.save(); ctx.strokeStyle = "#00b894"; ctx.fillStyle = "#00b894"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+    let ang = Math.atan2(ey-cy, ex-cx); ctx.translate(ex, ey); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-10, -5); ctx.lineTo(-10, 5); ctx.fill();
+    ctx.rotate(-ang); ctx.fillStyle = "#006266"; ctx.font = "bold 16px Arial"; ctx.fillText("B", 15, -10);
+    ctx.restore();
+}
+function drawHint() {
+    if(state.hasInteracted) return;
+    let alpha = 0.6 + 0.4 * Math.sin(state.time * 2);
+    ctx.fillStyle = `rgba(214, 48, 49, ${alpha})`; ctx.font = "bold 16px Arial"; ctx.textAlign = "center";
+    ctx.fillText("✋ Déplacez-moi !", state.mag.x, state.mag.y + 45);
+}
+function drawCredits() {
+    ctx.fillStyle = "#b2bec3"; ctx.font = "italic 12px Arial"; ctx.textAlign = "right";
+    ctx.fillText("(Espinosa T. Lycée Albert Einstein)", cvs.width - 15, cvs.height - 15);
+}
+
+// --- BOUCLE ---
+function loop() {
+    update();
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    
+    // Fond optionnel
+    if(state.showField) { /* code dipoles V8 abrégé */ 
+        ctx.strokeStyle = "rgba(100, 110, 120, 0.15)"; ctx.lineWidth = 1;
+        for(let i=20; i < SCENE.scope.x-20; i += 40) {
+            for(let j=20; j < cvs.height; j += 40) {
+                if(Math.hypot(i-state.mag.x, j-state.mag.y) < 60) continue;
+                let b = getFieldAt(i, j); let a = Math.atan2(b.y, b.x);
+                ctx.save(); ctx.translate(i, j); ctx.rotate(a);
+                ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); 
+                ctx.moveTo(2,-2); ctx.lineTo(5,0); ctx.lineTo(2,2); ctx.stroke(); ctx.restore();
+            }
+        }
+    }
+
+    drawWires(); drawOscilloscope(); drawCoil(); drawGreenVector(); drawMagnet(); drawHint(); drawCredits();
+    requestAnimationFrame(loop);
+}
+
+// --- EVENTS ---
+cvs.addEventListener('mousedown', e => {
+    let r = cvs.getBoundingClientRect(); let mx = e.clientX - r.left; let my = e.clientY - r.top;
+    if(Math.hypot(mx - state.mag.x, my - state.mag.y) < 60) {
+        state.isDragging = true; state.hasInteracted = true;
+        state.dragOff = { x: mx - state.mag.x, y: my - state.mag.y }; cvs.style.cursor = "grabbing";
+    }
+});
+window.addEventListener('mouseup', () => { state.isDragging = false; cvs.style.cursor = "default"; });
+window.addEventListener('mousemove', e => {
+    let r = cvs.getBoundingClientRect(); let mx = e.clientX - r.left; let my = e.clientY - r.top;
+    if(state.isDragging) {
+        if(mx<50) mx=50; if(mx>850) mx=850; if(my<50) my=50; if(my>450) my=450;
+        state.mag.x = mx - state.dragOff.x; state.mag.y = my - state.dragOff.y;
+    } else {
+        cvs.style.cursor = (Math.hypot(mx - state.mag.x, my - state.mag.y) < 60) ? "grab" : "default";
+    }
+});
+
+// UI
+document.getElementById('speedSlider').addEventListener('input', e => state.speed = e.target.value / 100);
+document.getElementById('turnsSlider').addEventListener('input', e => state.nbTurns = parseInt(e.target.value));
+document.getElementById('checkField').addEventListener('change', e => state.showField = e.target.checked);
+document.getElementById('checkVector').addEventListener('change', e => state.showVector = e.target.checked);
+document.getElementById('checkFluxTrace').addEventListener('change', e => state.showFluxTrace = e.target.checked);
+
+window.togglePause = () => {
+    state.isPaused = !state.isPaused;
+    let btn = document.getElementById('pauseBtn');
+    if(state.isPaused) { btn.textContent = "Reprendre"; btn.classList.add("paused"); }
+    else { btn.textContent = "Pause"; btn.classList.remove("paused"); }
+};
+window.resetLab = () => {
+    state.mag.x = 250; state.mag.y = 250; state.traceVoltage.fill(0); state.traceFlux.fill(0);
+    state.hasInteracted = false;
+};
+
+loop();
+</script>
+</body>
+</html>

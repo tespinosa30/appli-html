@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inertie - Version 800m & Grande Minimap</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #262626;
+            --text: #e0e0e0;
+            --accent: #4fc3f7;
+            
+            /* Couleurs Force & Cinématique */
+            --c-poids: #ce93d8; 
+            --c-contact: #81c784; 
+            --c-total-R: #2e7d32; 
+            --c-tract: #90caf9; 
+            --c-vitesse: #fff59d; 
+            --c-accel: #ffab40;
+            --c-somme: #ffffff;
+            
+            /* Couleurs Marqueurs */
+            --m-accel: #ff5252;   /* Rouge */
+            --m-frein: #69f0ae;   /* Vert */
+            --m-const: #40c4ff;   /* Bleu */
+        }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        #container { flex: 1; position: relative; }
+        canvas { display: block; width: 100%; height: 100%; background: #1a1a1a; }
+
+        /* UI DROITE (PARAMETRES) */
+        #ui {
+            position: absolute; top: 20px; right: 20px;
+            width: 320px; background: rgba(38, 38, 38, 0.95);
+            padding: 20px; border-radius: 8px; border: 1px solid #555;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            z-index: 10;
+            max-height: 90vh; overflow-y: auto;
+        }
+        h2 { margin: 0 0 15px 0; font-size: 1.1rem; color: var(--accent); border-bottom: 2px solid #444; padding-bottom: 10px; }
+
+        .slider-row { margin-bottom: 15px; }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+
+        .checkbox-row { 
+            display: flex; align-items: center; gap: 10px; margin: 8px 0; 
+            padding: 6px; background: #333; border-radius: 5px; font-size: 0.85rem;
+        }
+        input[type=checkbox] { accent-color: var(--accent); cursor: pointer; width: 16px; height: 16px; }
+        
+        .buttons { display: flex; gap: 10px; margin-top: 20px; }
+        button { 
+            flex: 1; padding: 10px; border: none; border-radius: 4px; 
+            background: #444; color: white; cursor: pointer; font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background: var(--accent); color: #121212; }
+
+        /* STATUS GAUCHE (Groupe) */
+        #left-panel {
+            position: absolute; top: 20px; left: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+            z-index: 10;
+        }
+
+        /* 1. Status Mouvement (Prêt, MRU...) */
+        #status-mvt {
+            background: rgba(0,0,0,0.8); padding: 12px 20px; border-radius: 50px;
+            border: 1px solid #555; display: flex; align-items: center; gap: 15px;
+            width: fit-content;
+        }
+        .led { width: 12px; height: 12px; border-radius: 50%; background: #555; }
+        .led.on-green { background: #00e676; box-shadow: 0 0 8px #00e676; }
+        .led.on-red { background: #ff1744; box-shadow: 0 0 8px #ff1744; }
+        .led.on-orange { background: #ff9800; box-shadow: 0 0 8px #ff9800; }
+
+        /* 2. Status Compensation Forces */
+        #force-balance-status {
+            background: rgba(0,0,0,0.85); padding: 12px 20px; border-radius: 8px;
+            border: 1px solid #777; font-weight: bold; font-size: 0.95rem;
+            text-align: left; color: white; width: 280px;
+        }
+        
+        /* Options Minimap - Décalé vers le bas car minimap plus grande */
+        #minimap-options {
+            position: absolute; top: 250px; left: 20px;
+            background: rgba(0,0,0,0.6); padding: 10px; border-radius: 6px;
+            border: 1px solid #444; font-size: 0.85rem; color: #ccc;
+            z-index: 10;
+        }
+        #minimap-options label { cursor: pointer; display: flex; align-items: center; gap: 8px; }
+
+        #dist-display {
+            position: absolute; bottom: 20px; left: 20px;
+            font-family: monospace; font-size: 1.2rem; color: #888;
+        }
+
+        #credit-fixed {
+            position: absolute; bottom: 10px; right: 20px;
+            font-size: 0.8rem; color: rgba(255, 255, 255, 0.3);
+            font-style: italic; pointer-events: none;
+        }
+
+        .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top:15px; font-size: 0.8rem; color:#ccc; }
+        .l-item { display: flex; align-items: center; gap: 6px; }
+        .dot { width: 10px; height: 10px; border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <canvas id="cvs"></canvas>
+
+    <!-- GAUCHE : Panneau d'informations -->
+    <div id="left-panel">
+        <div id="status-mvt">
+            <div id="led" class="led"></div>
+            <div id="status-text">Prêt</div>
+        </div>
+        
+        <div id="force-balance-status">
+            SOMME DES FORCES NULLE<br>
+            <span style="font-size:0.85rem; color:#aaa;">(Forces compensées)</span>
+        </div>
+    </div>
+
+    <!-- GAUCHE BAS : Options Minimap -->
+    <div id="minimap-options">
+        <label>
+            <input type="checkbox" id="chk-markers"> 
+            Marqueurs trajectoire (Δt = 1.0s)
+        </label>
+        <div style="margin-top:5px; font-size:0.75rem; display:flex; gap:10px;">
+            <span style="color:var(--m-accel)">● Accélère</span>
+            <span style="color:var(--m-frein)">● Ralentit</span>
+            <span style="color:var(--m-const)">● Constant</span>
+        </div>
+    </div>
+    
+    <div id="dist-display">Distance: 0.00 m</div>
+    <div id="credit-fixed">Espinosa T. Lycée Albert Einstein</div>
+
+    <!-- DROITE : Paramètres -->
+    <div id="ui">
+        <h2>Paramètres</h2>
+        
+        <div class="slider-row">
+            <div class="slider-header">
+                <span style="color:var(--c-tract)">Traction</span> <span id="lbl-force">0 N</span>
+            </div>
+            <input type="range" id="sl-force" min="0" max="250" step="1" value="0">
+        </div>
+
+        <div class="slider-row">
+            <div class="slider-header">
+                <span style="color:var(--c-contact)">Coeff. Frottement</span> <span id="lbl-fric">0.5</span>
+            </div>
+            <input type="range" id="sl-fric" min="0.0" max="1.0" step="0.05" value="0.5">
+        </div>
+
+        <div class="checkbox-row">
+            <input type="checkbox" id="chk-dyn">
+            <label for="chk-dyn">Activer décrochage dynamique</label>
+        </div>
+
+        <div style="border-top: 1px solid #444; margin: 10px 0; padding-top:5px;">
+            <div style="font-size:0.8rem; color:#888; margin-bottom:5px;">Affichage Vecteurs :</div>
+            
+            <div class="slider-row">
+                <div class="slider-header">
+                    <span>Opacité Vecteurs</span> <span id="lbl-alpha">100%</span>
+                </div>
+                <input type="range" id="sl-alpha" min="0.2" max="1.0" step="0.1" value="1.0">
+            </div>
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="chk-show-forces" checked>
+                <label for="chk-show-forces">Afficher les Forces (P, Rn, f, F)</label>
+            </div>
+
+            <div class="checkbox-row">
+                <input type="checkbox" id="chk-show-v" checked>
+                <label for="chk-show-v" style="color:var(--c-vitesse)">Vitesse (v)</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="chk-show-a">
+                <label for="chk-show-a" style="color:var(--c-accel)">Accélération (a)</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="chk-total-r">
+                <label for="chk-total-r" style="color:var(--c-total-R)">Réaction Totale (R)</label>
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="chk-point-mode">
+                <label for="chk-point-mode">Modèle Point Matériel</label>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button onclick="app.reset()">RESET</button>
+        </div>
+        
+        <div class="legend-grid">
+            <div class="l-item"><div class="dot" style="background:var(--c-poids)"></div> Poids P</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-tract)"></div> Traction F</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-contact)"></div> Rn et f</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-total-R)"></div> Réaction R</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-vitesse)"></div> Vitesse v</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-accel)"></div> Accélération a</div>
+            <div class="l-item"><div class="dot" style="background:var(--c-somme); border:1px solid white"></div> Somme ΣF</div>
+        </div>
+    </div>
+</div>
+
+<script>
+class App {
+    constructor() {
+        this.cvs = document.getElementById('cvs');
+        this.ctx = this.cvs.getContext('2d');
+        
+        // --- CONSTANTES ---
+        this.m = 20;    
+        this.g = 10;    
+        this.dt = 1/60; 
+        
+        // Config Monde
+        this.maxDistance = 800; // Changement à 800m
+        this.scalePx = 100;     
+        this.scaleVec = 1.5; 
+
+        // --- ETAT ---
+        this.pos = 0;   
+        this.v = 0;     
+        this.a = 0;
+        this.f_tract = 0; 
+        this.mu = 0.5;    
+        
+        // Flags & UI
+        this.isDyn = false; 
+        this.showForces = true; 
+        this.showTotalR = false;
+        this.isPointMode = false;
+        this.showV = true;  
+        this.showA = false; 
+        this.vectorAlpha = 1.0;
+        
+        // Marqueurs
+        this.showMarkers = false;
+        this.markers = []; 
+        this.timerMarker = 0;
+        this.markerInterval = 1.0; 
+        
+        this.f_fric_display = 0;
+        this.ended = false; 
+
+        // --- DOM ---
+        this.slForce = document.getElementById('sl-force');
+        this.slFric = document.getElementById('sl-fric');
+        this.slAlpha = document.getElementById('sl-alpha');
+        
+        this.chkDyn = document.getElementById('chk-dyn');
+        this.chkShowForces = document.getElementById('chk-show-forces');
+        this.chkTotalR = document.getElementById('chk-total-r');
+        this.chkPointMode = document.getElementById('chk-point-mode');
+        this.chkShowV = document.getElementById('chk-show-v');
+        this.chkShowA = document.getElementById('chk-show-a');
+        this.chkMarkers = document.getElementById('chk-markers');
+
+        this.lblForce = document.getElementById('lbl-force');
+        this.lblFric = document.getElementById('lbl-fric');
+        this.lblAlpha = document.getElementById('lbl-alpha');
+        
+        this.led = document.getElementById('led');
+        this.txtStatus = document.getElementById('status-text');
+        this.txtForceBalance = document.getElementById('force-balance-status');
+        this.divDist = document.getElementById('dist-display');
+
+        // --- EVENTS ---
+        this.slForce.oninput = (e) => { if(!this.ended) this.f_tract = +e.target.value; this.updateUI(); };
+        this.slFric.oninput = (e) => { this.mu = +e.target.value; this.updateUI(); };
+        this.slAlpha.oninput = (e) => { this.vectorAlpha = +e.target.value; this.lblAlpha.innerText = Math.round(this.vectorAlpha*100)+"%"; };
+        
+        this.chkDyn.onchange = (e) => { this.isDyn = e.target.checked; };
+        this.chkShowForces.onchange = (e) => { this.showForces = e.target.checked; };
+        this.chkTotalR.onchange = (e) => { this.showTotalR = e.target.checked; };
+        this.chkPointMode.onchange = (e) => { this.isPointMode = e.target.checked; };
+        this.chkShowV.onchange = (e) => { this.showV = e.target.checked; };
+        this.chkShowA.onchange = (e) => { this.showA = e.target.checked; };
+        this.chkMarkers.onchange = (e) => { this.showMarkers = e.target.checked; };
+
+        window.onresize = () => this.resize();
+
+        // INIT
+        this.resize();
+        this.updateUI();
+        this.loop();
+    }
+
+    resize() {
+        this.cvs.width = window.innerWidth;
+        this.cvs.height = window.innerHeight;
+        this.groundY = this.cvs.height * 0.6; 
+    }
+
+    reset() {
+        this.v = 0;
+        this.a = 0;
+        this.pos = 0;
+        this.f_tract = 0;
+        this.slForce.value = 0;
+        this.ended = false;
+        this.markers = []; 
+        this.timerMarker = 0;
+        this.updateUI();
+    }
+
+    updateUI() {
+        this.lblForce.innerText = this.f_tract + " N";
+        this.lblFric.innerText = this.mu;
+        this.divDist.innerText = `Distance : ${this.pos.toFixed(2)} / ${this.maxDistance} m`;
+    }
+
+    // --- MOTEUR ---
+    update() {
+        if(this.ended) return; 
+
+        // Marqueurs
+        if(this.showMarkers && !this.ended) {
+            this.timerMarker += this.dt;
+            if(this.timerMarker >= this.markerInterval) {
+                this.timerMarker = 0;
+                
+                let col = "#40c4ff"; 
+                if(Math.abs(this.a) > 0.05) {
+                    if(Math.abs(this.v) < 0.01) {
+                         col = "#ff5252"; 
+                    } else if (Math.sign(this.a) === Math.sign(this.v)) {
+                         col = "#ff5252"; 
+                    } else {
+                         col = "#69f0ae"; 
+                    }
+                }
+                this.markers.push({x: this.pos, color: col});
+            }
+        }
+
+        if(this.pos >= this.maxDistance) {
+            this.pos = this.maxDistance;
+            this.v = 0;
+            this.a = 0;
+            this.ended = true;
+            this.f_tract = 0;
+            this.slForce.value = 0;
+            this.updateUI();
+            return;
+        }
+
+        const P = this.m * this.g;
+        const Rn = P; 
+        const f_max_static = this.mu * Rn; 
+        const f_kinetic = this.isDyn ? (f_max_static * 0.6) : f_max_static;
+        const epsilon = 0.001; 
+
+        if(Math.abs(this.v) <= epsilon) {
+            this.v = 0; 
+            if(this.f_tract <= f_max_static) {
+                this.f_fric_display = this.f_tract;
+                this.a = 0;
+            } else {
+                this.f_fric_display = f_kinetic;
+                const f_net = this.f_tract - f_kinetic;
+                this.a = f_net / this.m;
+                this.v += this.a * this.dt;
+            }
+        } else {
+            const dir = Math.sign(this.v);
+            this.f_fric_display = f_kinetic * dir;
+            const f_net = this.f_tract - (f_kinetic * dir); 
+            this.a = f_net / this.m;
+
+            const next_v = this.v + this.a * this.dt;
+            if(Math.sign(next_v) !== Math.sign(this.v)) {
+                if(this.f_tract <= f_max_static) {
+                    this.v = 0;
+                    this.a = 0;
+                    this.f_fric_display = this.f_tract; 
+                } else {
+                    this.v = next_v; 
+                }
+            } else {
+                this.v = next_v;
+            }
+        }
+
+        this.pos += this.v * this.dt;
+        this.updateUI();
+    }
+
+    // --- DESSIN ---
+    draw() {
+        const ctx = this.ctx;
+        const w = this.cvs.width;
+        const h = this.cvs.height;
+        const cx = w/2;
+        const cy = this.groundY;
+
+        // SCENE
+        var grad = ctx.createLinearGradient(0,0,0, h);
+        grad.addColorStop(0, "#263238"); 
+        grad.addColorStop(1, "#37474f");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0,0,w,h);
+
+        ctx.fillStyle = "#212121"; 
+        ctx.fillRect(0, cy, w, h-cy);
+        ctx.strokeStyle = "#424242"; 
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(w,cy); ctx.stroke();
+
+        const stripeGap = 200; 
+        const scroll = (this.pos * this.scalePx) % stripeGap;
+        ctx.strokeStyle = "#333"; 
+        ctx.lineWidth = 20;
+        ctx.beginPath();
+        for(let x = -scroll - 200; x < w; x += stripeGap) {
+            ctx.moveTo(x, h);
+            ctx.lineTo(x + 150, cy); 
+        }
+        ctx.stroke();
+
+        const size = 80;
+        const boxX = cx - size/2;
+        const boxY = cy - size;
+        
+        const distRemaining = this.maxDistance - this.pos;
+        const wallX = (boxX + size) + (distRemaining * this.scalePx);
+        const hookY = boxY + size/2;
+        
+        if(wallX < w) {
+            ctx.fillStyle = "#546e7a"; 
+            ctx.fillRect(wallX, cy - 200, 100, 200); 
+            ctx.fillStyle = "#37474f";
+            ctx.fillRect(wallX, hookY - 30, 40, 60); 
+            ctx.fillStyle = "#cfd8dc"; 
+            ctx.beginPath(); ctx.arc(wallX + 20, hookY, 15, 0, Math.PI*2); ctx.fill();
+            var anchorX = wallX;
+        } else {
+            var anchorX = w + 100;
+        }
+
+        this.drawRope(ctx, boxX + size, hookY, anchorX, hookY, this.f_tract);
+
+        if (this.isPointMode) {
+            ctx.globalAlpha = 0.2; 
+            ctx.fillStyle = "#8d6e63"; 
+            ctx.fillRect(boxX, boxY, size, size);
+            ctx.strokeStyle = "#4e342e";
+            ctx.strokeRect(boxX, boxY, size, size);
+            ctx.beginPath(); 
+            ctx.moveTo(boxX, boxY); ctx.lineTo(boxX+size, boxY+size);
+            ctx.moveTo(boxX+size, boxY); ctx.lineTo(boxX, boxY+size);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0; 
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(cx, cy - size/2, 4, 0, Math.PI*2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = "#8d6e63"; 
+            ctx.fillRect(boxX, boxY, size, size);
+            ctx.lineWidth = 3; 
+            ctx.strokeStyle = "#4e342e";
+            ctx.strokeRect(boxX, boxY, size, size);
+            ctx.beginPath(); 
+            ctx.moveTo(boxX, boxY); ctx.lineTo(boxX+size, boxY+size);
+            ctx.moveTo(boxX+size, boxY); ctx.lineTo(boxX, boxY+size);
+            ctx.stroke();
+        }
+
+        // --- VECTEURS ---
+        ctx.globalAlpha = this.vectorAlpha;
+
+        const CM_X = cx; 
+        const CM_Y = cy - size/2; 
+        
+        const originP = CM_X;
+        const originP_Y = CM_Y;
+        const originContact_X = this.isPointMode ? CM_X : cx;
+        const originContact_Y = this.isPointMode ? CM_Y : cy;
+        const originTract_X = this.isPointMode ? CM_X : boxX + size;
+        const originTract_Y = this.isPointMode ? CM_Y : hookY;
+
+        const colContact = "#81c784";
+
+        let f_val_x = 0;
+        if(Math.abs(this.f_fric_display) > 1 && !this.ended) {
+            let sign = 1;
+            if(Math.abs(this.v) > 0.001) sign = Math.sign(this.v);
+            else if(this.f_tract > 0) sign = 1;
+            f_val_x = -Math.abs(this.f_fric_display) * sign;
+        }
+
+        // DESSIN DES FORCES
+        if(this.showForces) {
+            this.drawArrow(ctx, originP, originP_Y, 0, this.m*this.g, "#ce93d8", "P");
+            this.drawArrow(ctx, originContact_X, originContact_Y, 0, -(this.m*this.g), colContact, "Rn");
+            
+            if(Math.abs(f_val_x) > 0.1)
+                this.drawArrow(ctx, originContact_X, originContact_Y, f_val_x, 0, colContact, "f");
+
+            if(this.showTotalR && !this.ended) {
+                const Rn_val = -(this.m*this.g);
+                this.drawArrow(ctx, originContact_X, originContact_Y, f_val_x, Rn_val, "#2e7d32", "R");
+            }
+            
+            if(this.f_tract > 1)
+                this.drawArrow(ctx, originTract_X, originTract_Y, this.f_tract, 0, "#90caf9", "F");
+        }
+
+        // --- CINÉMATIQUE (v et a) CENTRÉE SUR CM ---
+        if (this.showV && Math.abs(this.v) > 0.01) {
+            this.drawArrow(ctx, CM_X, CM_Y, this.v * 10, 0, "#fff59d", "v", true);
+        }
+
+        if (this.showA && Math.abs(this.a) > 0.05 && !this.ended) {
+            this.drawArrow(ctx, CM_X, CM_Y, this.a * 20, 0, "#ffab40", "a", true);
+        }
+
+        // --- VECTEUR SOMME DES FORCES (Maintenant centré sur CM) ---
+        let sumX = 0;
+        if(!this.ended) sumX = this.m * this.a; 
+        
+        if(this.showForces && Math.abs(sumX) > 1 && !this.ended) {
+            this.drawArrow(ctx, CM_X, CM_Y, sumX, 0, "#ffffff", "ΣF", false, true);
+        }
+
+        ctx.globalAlpha = 1.0;
+
+        this.drawMinimap(ctx);
+        this.updateHUD(sumX);
+    }
+
+    drawMinimap(ctx) {
+        // MINIMAP TAILLE XXL
+        const mapW = 1100; // Largeur ~doublée (600 -> 1100)
+        const mapH = 150;  // Hauteur augmentée
+        const mapX = 20; 
+        const mapY = 80; 
+
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.strokeStyle = "#555";
+        ctx.lineWidth = 1;
+        ctx.fillRect(mapX, mapY, mapW, mapH);
+        ctx.strokeRect(mapX, mapY, mapW, mapH);
+
+        ctx.fillStyle = "#aaa";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("VUE GLOBALE (REF. TERRESTRE)", mapX + 10, mapY + 20);
+
+        ctx.beginPath();
+        ctx.rect(mapX, mapY, mapW, mapH);
+        ctx.clip();
+
+        const totalWorldW = this.maxDistance + 20; 
+        const scaleMap = (mapW - 40) / totalWorldW; 
+        
+        const groundY = mapY + mapH - 20;
+        const startX = mapX + 20;
+
+        // Sol
+        ctx.strokeStyle = "#888";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(startX, groundY);
+        ctx.lineTo(startX + totalWorldW * scaleMap, groundY);
+        ctx.stroke();
+
+        // Mur
+        const wallMapX = startX + this.maxDistance * scaleMap;
+        ctx.fillStyle = "#546e7a";
+        ctx.fillRect(wallMapX, groundY - 40, 15, 40);
+
+        // Caisse
+        const crateMapX = startX + this.pos * scaleMap;
+        const crateSize = 18; 
+        ctx.fillStyle = "#8d6e63"; 
+        ctx.fillRect(crateMapX - crateSize, groundY - crateSize, crateSize, crateSize);
+
+        // Corde
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(crateMapX, groundY - crateSize/2); 
+        ctx.lineTo(wallMapX, groundY - crateSize/2); 
+        ctx.stroke();
+        
+        // MARQUEURS
+        if(this.showMarkers) {
+            this.markers.forEach(m => {
+                const mx = startX + m.x * scaleMap;
+                ctx.fillStyle = m.color; 
+                ctx.beginPath();
+                ctx.arc(mx, groundY + 5, 2.5, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        ctx.restore();
+    }
+
+    drawRope(ctx, x1, y1, x2, y2, force) {
+        ctx.beginPath();
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 3;
+        if(force < 1) {
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2 + 50; 
+            ctx.moveTo(x1, y1);
+            ctx.quadraticCurveTo(midX, midY, x2, y2);
+        } else {
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+        }
+        ctx.stroke();
+    }
+
+    drawArrow(ctx, x, y, dx_val, dy_val, color, labelText, isVel=false, isSum=false) {
+        let dx = dx_val * (isVel ? 1 : this.scaleVec);
+        let dy = dy_val * (isVel ? 1 : this.scaleVec);
+        const mag = Math.sqrt(dx*dx + dy*dy);
+        if(mag < 3) return; 
+
+        ctx.save();
+        ctx.translate(x, y);
+        const angle = Math.atan2(dy, dx);
+        ctx.rotate(angle);
+
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = isSum ? 4 : 3;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(mag, 0);
+        ctx.stroke();
+
+        const head = isSum ? 14 : 10;
+        ctx.beginPath();
+        ctx.moveTo(mag, 0);
+        ctx.lineTo(mag - head, -head/2);
+        ctx.lineTo(mag - head, head/2);
+        ctx.fill();
+
+        ctx.rotate(-angle);
+        let lx = mag * Math.cos(angle);
+        let ly = mag * Math.sin(angle);
+
+        if(Math.abs(Math.sin(angle)) > 0.5) { 
+            lx += 15; ly += 5;
+        } else { 
+            lx += 5; ly -= 10;
+        }
+
+        this.drawVectorLabel(ctx, lx, ly, labelText, color);
+        ctx.restore();
+    }
+
+    drawVectorLabel(ctx, x, y, text, color) {
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.font = "bold 16px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(text, x, y);
+        const width = ctx.measureText(text).width;
+        const arrowY = y - 16;
+        const arrowStart = x;
+        const arrowEnd = x + width;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(arrowStart, arrowY); ctx.lineTo(arrowEnd, arrowY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(arrowEnd, arrowY); ctx.lineTo(arrowEnd - 4, arrowY - 2); ctx.lineTo(arrowEnd - 4, arrowY + 2); ctx.fill();
+    }
+
+    updateHUD(sumF) {
+        // MAJ TEXTE FORCE
+        if(Math.abs(sumF) < 1) {
+            this.txtForceBalance.innerHTML = `SOMME DES FORCES NULLE<br><span style="font-size:0.85rem; color:#81c784;">(Forces compensées)</span>`;
+            this.txtForceBalance.style.borderColor = "#81c784";
+        } else {
+            this.txtForceBalance.innerHTML = `SOMME DES FORCES NON NULLE<br><span style="font-size:0.85rem; color:#ff5252;">(Forces non compensées)</span>`;
+            this.txtForceBalance.style.borderColor = "#ff5252";
+        }
+
+        if(this.ended) {
+            this.led.className = "led on-red";
+            this.txtStatus.innerHTML = "<span style='color:#ff5252'>ARRIVÉE</span>";
+            return;
+        }
+
+        if(Math.abs(this.v) <= 0.001 && Math.abs(this.a) <= 0.001) {
+            this.led.className = "led on-green";
+            this.txtStatus.innerHTML = "<span style='color:#00e676'>IMMOBILE</span>";
+        } 
+        else if (Math.abs(this.a) < 0.1) {
+            this.led.className = "led on-orange";
+            this.txtStatus.innerHTML = "<span style='color:#ff9800'>VITESSE CONSTANTE</span> (MRU)";
+        }
+        else {
+            this.led.className = "led on-red";
+            this.txtStatus.innerHTML = `<span style='color:#ff1744'>VARIATION VITESSE</span>`;
+        }
+    }
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+}
+
+const app = new App();
+</script>
+</body>
+</html>

@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratoire Virtuel : Oscilloscope & GBF</title>
+    <style>
+        :root {
+            --bg-color: #e8eaed;
+            --panel-bg: #f8f9fa;
+            --text-main: #202124;
+            --text-muted: #5f6368;
+            --accent-color: #1a73e8;
+            --border-frame: #dadce0;
+            --screen-bg: #000;
+            --ch1-color: #00c853;
+            --ch2-color: #ffc107;
+            --shadow: rgba(0,0,0,0.1);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        h1 { 
+            margin: 0 0 20px 0; 
+            font-weight: 400; 
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border-frame);
+            padding-bottom: 15px;
+            width: 100%;
+            max-width: 1100px;
+            text-align: center;
+            color: var(--text-main);
+        }
+
+        /* --- LAYOUT PRINCIPAL --- */
+        .lab-bench {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        /* --- SECTION HAUTE : OSCILLOSCOPE --- */
+        .oscilloscope-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        /* Le cadre écran */
+        .screen-frame {
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid var(--border-frame);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px var(--shadow);
+            display: inline-block;
+        }
+
+        canvas {
+            display: block;
+            background-color: var(--screen-bg);
+            border-radius: 4px;
+            cursor: crosshair; 
+        }
+
+        /* Panneau de droite (Réglages Oscillo) */
+        .scope-controls {
+            flex: 1;
+            min-width: 280px;
+            max-width: 350px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-frame);
+            box-shadow: 0 1px 3px var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* --- SECTION BASSE : GBF --- */
+        .gbf-section {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-frame);
+            box-shadow: 0 1px 3px var(--shadow);
+            padding: 20px;
+            margin-top: 10px;
+        }
+
+        .gbf-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--border-frame);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .gbf-channels {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+
+        .channel-col {
+            flex: 1;
+            min-width: 300px;
+            padding: 15px;
+            background: #fff;
+            border-radius: 8px;
+            border-left: 4px solid transparent;
+            box-shadow: 0 1px 2px var(--shadow);
+        }
+        .channel-col.ch1 { border-left-color: var(--ch1-color); }
+        .channel-col.ch2 { border-left-color: var(--ch2-color); }
+
+        /* --- ELEMENTS UI COMMUNS --- */
+        h2 { margin: 0; font-size: 1rem; color: var(--text-muted); text-transform: uppercase; font-weight: 500; }
+        h3 { margin: 0 0 10px 0; font-size: 0.95rem; color: var(--text-main); font-weight: 600; }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            color: var(--text-main);
+        }
+
+        .val {
+            font-family: 'Consolas', monospace;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        input[type=range] {
+            width: 100%;
+            height: 6px;
+            background: #dadce0;
+            border-radius: 3px;
+            outline: none;
+            appearance: none;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px; height: 18px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 18px; height: 18px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            background: #fff;
+            color: var(--text-main);
+            border: 1px solid var(--border-frame);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button.btn-print {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 15px;
+        }
+        button.btn-print:hover { background-color: #1557b0; }
+
+        /* Style pour les contrôles conditionnels */
+        .conditional-control {
+            background: rgba(26, 115, 232, 0.05);
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            border-left: 3px solid var(--accent-color);
+        }
+
+        /* Toggle switch pour ON/OFF */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: rgba(0,0,0,0.03);
+            border-radius: 4px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: #dadce0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: var(--accent-color);
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: left 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .toggle-switch.active .toggle-slider {
+            left: 28px;
+        }
+
+        .toggle-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* Checkbox style pour inversion */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding: 5px;
+            background: rgba(0,0,0,0.02);
+            border-radius: 4px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-container label {
+            margin: 0;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        /* Modal pour export */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-main);
+        }
+
+        .modal-option {
+            margin-bottom: 15px;
+        }
+
+        .modal-option label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .modal-option label:hover {
+            background: rgba(0,0,0,0.03);
+        }
+
+        .modal-option input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal-btn.primary {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .modal-btn.primary:hover {
+            background: #1557b0;
+        }
+
+        .modal-btn.secondary {
+            background: #e8eaed;
+            color: var(--text-main);
+        }
+
+        .modal-btn.secondary:hover {
+            background: #dadce0;
+        }
+
+        /* Crédit discret en bas à droite */
+        .credit {
+            position: fixed;
+            bottom: 8px;
+            right: 12px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'Segoe UI', sans-serif;
+            opacity: 0.6;
+            z-index: 1000;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Simulateur Oscilloscope & GBF</h1>
+
+    <div class="lab-bench">
+
+        <!-- PARTIE HAUTE : ECRAN + REGLAGES OSCILLO -->
+        <div class="oscilloscope-section">
+
+            <!-- Le cadre écran -->
+            <div class="screen-frame">
+                <canvas id="scopeCanvas" width="600" height="400"></canvas>
+            </div>
+
+            <!-- Panneau de contrôle Oscillo (à droite) -->
+            <div class="scope-controls">
+                <button class="btn-print" onclick="showExportDialog()">Générer l'image de l'écran</button>
+
+                <div class="control-group">
+                    <label>Base de temps <span id="val-timeDiv" class="val">1 ms/div</span></label>
+                    <input type="range" id="timeDiv" min="0.1" max="10" step="0.1" value="1">
+                </div>
+
+                <hr style="border:0; border-top:1px solid var(--border-frame); margin: 15px 0;">
+
+                <div class="control-group">
+                    <label style="color:var(--ch1-color)">Calibre CH1 <span id="val-vDiv1" class="val">2 V/div</span></label>
+                    <input type="range" id="vDiv1" min="0.5" max="10" step="0.5" value="2">
+                </div>
+                <div class="control-group">
+                    <label>Position Y (CH1) <span id="val-posY1" class="val">0 div</span></label>
+                    <input type="range" id="posY1" min="-4" max="4" step="0.1" value="0">
+                </div>
+
+                <hr style="border:0; border-top:1px solid var(--border-frame); margin: 15px 0;">
+
+                <div class="control-group">
+                    <label style="color:var(--ch2-color)">Calibre CH2 <span id="val-vDiv2" class="val">2 V/div</span></label>
+                    <input type="range" id="vDiv2" min="0.5" max="10" step="0.5" value="2">
+                </div>
+                <div class="control-group">
+                    <label>Position Y (CH2) <span id="val-posY2" class="val">0 div</span></label>
+                    <input type="range" id="posY2" min="-4" max="4" step="0.1" value="0">
+                </div>
+            </div>
+        </div>
+
+        <!-- PARTIE BASSE : GENERATEUR GBF (En dessous) -->
+        <div class="gbf-section">
+            <div class="gbf-header">
+                <h2>Générateur de Fonctions (GBF)</h2>
+                <div style="width: 40%;">
+                    <label>Fréquence Commune <span id="val-freq" class="val">500 Hz</span></label>
+                    <input type="range" id="freq" min="10" max="2000" step="10" value="500">
+                </div>
+            </div>
+
+            <div class="gbf-channels">
+                <!-- Voie 1 -->
+                <div class="channel-col ch1">
+                    <h3 style="color:var(--ch1-color)">SORTIE 1</h3>
+
+                    <!-- Toggle ON/OFF -->
+                    <div class="toggle-container">
+                        <div class="toggle-switch active" id="toggle1" onclick="toggleChannel(1)">
+                            <div class="toggle-slider"></div>
+                        </div>
+                        <span class="toggle-label" id="toggle-label1">ON</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Forme</label>
+                        <select id="type1" onchange="updateFormSpecificControls(1)">
+                            <option value="sine">Sinusoïdal</option>
+                            <option value="square">Carré</option>
+                            <option value="triangle">Triangulaire</option>
+                            <option value="sawtooth">Dent de Scie</option>
+                            <option value="half-rect">Redressé Simple Alt.</option>
+                            <option value="full-rect">Redressé Double Alt.</option>
+                            <option value="burst">Salve (Émission Acoustique)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Amplitude <span id="val-amp1" class="val">5 V</span></label>
+                        <input type="range" id="amp1" min="0" max="10" step="0.1" value="5">
+                    </div>
+                    <div class="control-group">
+                        <label>Décalage Horizontal <span id="val-timeShift1" class="val">0.0 ms</span></label>
+                        <input type="range" id="timeShift1" min="-5" max="5" step="0.1" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label>Offset DC <span id="val-off1" class="val">0 V</span></label>
+                        <input type="range" id="off1" min="-5" max="5" step="0.1" value="0">
+                    </div>
+
+                    <!-- Checkbox inversion -->
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="invert1" onchange="updateParam('invert1', this.checked)">
+                        <label for="invert1">Inverser le signal</label>
+                    </div>
+
+                    <!-- Contrôles spécifiques pour carré -->
+                    <div id="square-controls-1" class="conditional-control" style="display:none;">
+                        <div class="control-group">
+                            <label>Rapport Cyclique <span id="val-duty1" class="val">50 %</span></label>
+                            <input type="range" id="duty1" min="10" max="90" step="5" value="50">
+                        </div>
+                    </div>
+
+                    <!-- Contrôles spécifiques pour salve -->
+                    <div id="burst-controls-1" class="conditional-control" style="display:none;">
+                        <div class="control-group">
+                            <label>Durée Salve <span id="val-burstDuration1" class="val">1.0 ms</span></label>
+                            <input type="range" id="burstDuration1" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                        <div class="control-group">
+                            <label>Durée entre Salves <span id="val-burstGap1" class="val">2.0 ms</span></label>
+                            <input type="range" id="burstGap1" min="0.5" max="10" step="0.1" value="2.0">
+                        </div>
+                        <div class="control-group">
+                            <label>Fréquence Salve <span id="val-burstFreq1" class="val">5000 Hz</span></label>
+                            <input type="range" id="burstFreq1" min="1000" max="20000" step="500" value="5000">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Voie 2 -->
+                <div class="channel-col ch2">
+                    <h3 style="color:var(--ch2-color)">SORTIE 2</h3>
+
+                    <!-- Toggle ON/OFF -->
+                    <div class="toggle-container">
+                        <div class="toggle-switch active" id="toggle2" onclick="toggleChannel(2)">
+                            <div class="toggle-slider"></div>
+                        </div>
+                        <span class="toggle-label" id="toggle-label2">ON</span>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Forme</label>
+                        <select id="type2" onchange="updateFormSpecificControls(2)">
+                            <option value="sine">Sinusoïdal</option>
+                            <option value="square">Carré</option>
+                            <option value="triangle">Triangulaire</option>
+                            <option value="sawtooth">Dent de Scie</option>
+                            <option value="half-rect">Redressé Simple Alt.</option>
+                            <option value="full-rect">Redressé Double Alt.</option>
+                            <option value="burst">Salve (Émission Acoustique)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Amplitude <span id="val-amp2" class="val">5 V</span></label>
+                        <input type="range" id="amp2" min="0" max="10" step="0.1" value="5">
+                    </div>
+                    <div class="control-group">
+                        <label>Décalage Horizontal <span id="val-timeShift2" class="val">0.0 ms</span></label>
+                        <input type="range" id="timeShift2" min="-5" max="5" step="0.1" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label>Offset DC <span id="val-off2" class="val">0 V</span></label>
+                        <input type="range" id="off2" min="-5" max="5" step="0.1" value="0">
+                    </div>
+
+                    <!-- Checkbox inversion -->
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="invert2" onchange="updateParam('invert2', this.checked)">
+                        <label for="invert2">Inverser le signal</label>
+                    </div>
+
+                    <!-- Contrôles spécifiques pour carré -->
+                    <div id="square-controls-2" class="conditional-control" style="display:none;">
+                        <div class="control-group">
+                            <label>Rapport Cyclique <span id="val-duty2" class="val">50 %</span></label>
+                            <input type="range" id="duty2" min="10" max="90" step="5" value="50">
+                        </div>
+                    </div>
+
+                    <!-- Contrôles spécifiques pour salve -->
+                    <div id="burst-controls-2" class="conditional-control" style="display:none;">
+                        <div class="control-group">
+                            <label>Durée Salve <span id="val-burstDuration2" class="val">1.0 ms</span></label>
+                            <input type="range" id="burstDuration2" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                        <div class="control-group">
+                            <label>Durée entre Salves <span id="val-burstGap2" class="val">2.0 ms</span></label>
+                            <input type="range" id="burstGap2" min="0.5" max="10" step="0.1" value="2.0">
+                        </div>
+                        <div class="control-group">
+                            <label>Fréquence Salve <span id="val-burstFreq2" class="val">5000 Hz</span></label>
+                            <input type="range" id="burstFreq2" min="1000" max="20000" step="500" value="5000">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal d'export -->
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal-content">
+            <div class="modal-title">Options d'export</div>
+            <div class="modal-option">
+                <label>
+                    <input type="checkbox" id="ch2Dashed" checked>
+                    <span>Voie 2 en pointillés</span>
+                </label>
+            </div>
+            <div class="modal-option">
+                <label>
+                    <input type="checkbox" id="showCalibration" checked>
+                    <span>Afficher les calibres</span>
+                </label>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeExportDialog()">Annuler</button>
+                <button class="modal-btn primary" onclick="confirmExport()">Exporter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Crédit discret en bas à droite -->
+    <div class="credit">Espinosa T. Lycée Albert Einstein</div>
+
+    <script>
+        // --- MOTEUR JS ---
+        const canvas = document.getElementById('scopeCanvas');
+        const mainCtx = canvas.getContext('2d');
+
+        // État
+        const state = {
+            timeDiv: 1.0, 
+            vDiv1: 2.0, vDiv2: 2.0, 
+            posY1: 0.0, posY2: 0.0,
+            freq: 500,
+            type1: 'sine', amp1: 5.0, off1: 0.0, timeShift1: 0.0,
+            type2: 'sine', amp2: 5.0, off2: 0.0, timeShift2: 0.0,
+            duty1: 50, duty2: 50,
+            burstDuration1: 1.0, burstGap1: 2.0, burstFreq1: 5000,
+            burstDuration2: 1.0, burstGap2: 2.0, burstFreq2: 5000,
+            enabled1: true, enabled2: true,
+            invert1: false, invert2: false
+        };
+
+        let needsRedraw = true;
+
+        // Toggle channel ON/OFF
+        function toggleChannel(channel) {
+            const toggleEl = document.getElementById('toggle' + channel);
+            const labelEl = document.getElementById('toggle-label' + channel);
+            state['enabled' + channel] = !state['enabled' + channel];
+
+            if (state['enabled' + channel]) {
+                toggleEl.classList.add('active');
+                labelEl.textContent = 'ON';
+            } else {
+                toggleEl.classList.remove('active');
+                labelEl.textContent = 'OFF';
+            }
+            needsRedraw = true;
+        }
+
+        // Afficher/masquer les contrôles spécifiques selon la forme
+        function updateFormSpecificControls(channel) {
+            const type = state['type' + channel];
+            const squareDiv = document.getElementById('square-controls-' + channel);
+            const burstDiv = document.getElementById('burst-controls-' + channel);
+
+            squareDiv.style.display = (type === 'square') ? 'block' : 'none';
+            burstDiv.style.display = (type === 'burst') ? 'block' : 'none';
+            needsRedraw = true;
+        }
+
+        // Export dialog
+        function showExportDialog() {
+            document.getElementById('exportModal').classList.add('active');
+        }
+
+        function closeExportDialog() {
+            document.getElementById('exportModal').classList.remove('active');
+        }
+
+        function confirmExport() {
+            const ch2Dashed = document.getElementById('ch2Dashed').checked;
+            const showCalibration = document.getElementById('showCalibration').checked;
+            exportImage(ch2Dashed, showCalibration);
+            closeExportDialog();
+        }
+
+        // Physique - Générateurs de signaux
+        function getSignalValue(type, t, freq, duty, burstDuration, burstGap, burstFreq) {
+            const omega = 2 * Math.PI * freq;
+            const angle = omega * t;
+
+            if (type === 'sine') {
+                return Math.sin(angle);
+            }
+
+            if (type === 'square') {
+                const period = 1.0 / freq;
+                const tMod = ((t % period) + period) % period;
+                const dutyCycle = duty / 100.0;
+                return (tMod < period * dutyCycle) ? 1 : -1;
+            }
+
+            if (type === 'triangle') {
+                return (2 / Math.PI) * Math.asin(Math.sin(angle));
+            }
+
+            if (type === 'sawtooth') {
+                const period = 1.0 / freq;
+                const tMod = ((t % period) + period) % period;
+                return 2 * (tMod / period) - 1;
+            }
+
+            if (type === 'half-rect') {
+                const sinVal = Math.sin(angle);
+                return sinVal > 0 ? sinVal : 0;
+            }
+
+            if (type === 'full-rect') {
+                return Math.abs(Math.sin(angle));
+            }
+
+            if (type === 'burst') {
+                const burstDurationSec = burstDuration / 1000.0;
+                const burstGapSec = burstGap / 1000.0;
+                const burstPeriodSec = burstDurationSec + burstGapSec;
+                const tMod = ((t % burstPeriodSec) + burstPeriodSec) % burstPeriodSec;
+
+                if (tMod < burstDurationSec) {
+                    const burstOmega = 2 * Math.PI * burstFreq;
+                    const envelope = Math.sin(Math.PI * tMod / burstDurationSec);
+                    return Math.sin(burstOmega * t) * envelope;
+                } else {
+                    return 0;
+                }
+            }
+
+            return 0;
+        }
+
+        // Dessin Grille
+        function drawGrid(ctx, w, h, gridCol, axisCol) {
+            ctx.lineWidth = 1;
+            const numDivX = 10;
+            const numDivY = 8;
+            const stepX = w / numDivX;
+            const stepY = h / numDivY;
+
+            ctx.strokeStyle = gridCol;
+            ctx.beginPath();
+            for (let x = 0; x <= w + 1; x += stepX) {
+                ctx.moveTo(Math.floor(x)+0.5, 0); 
+                ctx.lineTo(Math.floor(x)+0.5, h);
+            }
+            for (let y = 0; y <= h + 1; y += stepY) {
+                ctx.moveTo(0, Math.floor(y)+0.5); 
+                ctx.lineTo(w, Math.floor(y)+0.5);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = axisCol;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(w/2, 0); ctx.lineTo(w/2, h);
+            ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+            ctx.stroke();
+        }
+
+        // Dessin Trace
+        function drawSignalTrace(ctx, w, h, chIndex, color, dash) {
+            const isCh1 = (chIndex === 1);
+            if (!state['enabled' + chIndex]) return;
+
+            const type = isCh1 ? state.type1 : state.type2;
+            const amp = isCh1 ? state.amp1 : state.amp2;
+            const offset = isCh1 ? state.off1 : state.off2;
+            const vDiv = isCh1 ? state.vDiv1 : state.vDiv2;
+            const posY = isCh1 ? state.posY1 : state.posY2;
+            const timeShift = isCh1 ? state.timeShift1 : state.timeShift2;
+            const duty = isCh1 ? state.duty1 : state.duty2;
+            const burstDuration = isCh1 ? state.burstDuration1 : state.burstDuration2;
+            const burstGap = isCh1 ? state.burstGap1 : state.burstGap2;
+            const burstFreq = isCh1 ? state.burstFreq1 : state.burstFreq2;
+            const invert = isCh1 ? state.invert1 : state.invert2;
+
+            const numDivX = 10;
+            const numDivY = 8;
+            const totalTime = (state.timeDiv * numDivX) / 1000; 
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            if (ctx.setLineDash) ctx.setLineDash(dash);
+
+            const pixelsPerDivY = h / numDivY;
+            const centerH = h / 2;
+
+            for (let x = 0; x < w; x++) {
+                const t = (x / w) * totalTime;
+                const tShifted = t + (timeShift / 1000.0);
+                let signalVal = getSignalValue(type, tShifted, state.freq, duty, burstDuration, burstGap, burstFreq);
+                if (invert) signalVal = -signalVal;
+                const voltage = (signalVal * amp) + offset;
+                const y = centerH - ( (voltage / vDiv) + posY ) * pixelsPerDivY;
+
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            if (ctx.setLineDash) ctx.setLineDash([]);
+        }
+
+        // Afficher calibres sur l'export
+        function drawCalibration(ctx, w, h) {
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+
+            const margin = 10;
+            const lineHeight = 16;
+            let y = margin + lineHeight;
+
+            ctx.fillText(`Base temps: ${state.timeDiv} ms/div`, margin, y);
+            y += lineHeight;
+
+            if (state.enabled1) {
+                ctx.fillText(`CH1: ${state.vDiv1} V/div`, margin, y);
+                y += lineHeight;
+            }
+
+            if (state.enabled2) {
+                ctx.fillText(`CH2: ${state.vDiv2} V/div`, margin, y);
+            }
+        }
+
+        function drawScene(ctxToDraw, isExport, ch2Dashed = false, showCalibration = false) {
+            const w = ctxToDraw.canvas.width;
+            const h = ctxToDraw.canvas.height;
+
+            const bgColor = isExport ? "#FFFFFF" : "#000000";
+            const gridColor = isExport ? "#cccccc" : "#333333";
+            const axisColor = isExport ? "#000000" : "#666666";
+            const c1Color = isExport ? "#000000" : "#00c853";
+            const c2Color = isExport ? "#000000" : "#ffc107";
+
+            ctxToDraw.fillStyle = bgColor;
+            ctxToDraw.fillRect(0, 0, w, h);
+
+            drawGrid(ctxToDraw, w, h, gridColor, axisColor);
+
+            drawSignalTrace(ctxToDraw, w, h, 1, c1Color, []);
+            const dash2 = (isExport && ch2Dashed) ? [8, 4] : []; 
+            drawSignalTrace(ctxToDraw, w, h, 2, c2Color, dash2);
+
+            if (isExport && showCalibration) {
+                drawCalibration(ctxToDraw, w, h);
+            }
+        }
+
+        function exportImage(ch2Dashed, showCalibration) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            drawScene(tempCtx, true, ch2Dashed, showCalibration);
+
+            const link = document.createElement('a');
+            link.download = 'oscillogramme_export.png';
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function animate() {
+            if (needsRedraw) {
+                drawScene(mainCtx, false);
+                needsRedraw = false;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Events
+        function updateParam(id, value) {
+            if (id.startsWith('type')) {
+                state[id] = value;
+                const channel = id.replace('type', '');
+                updateFormSpecificControls(channel);
+            }
+            else if (id.startsWith('invert')) {
+                state[id] = value;
+            }
+            else state[id] = parseFloat(value);
+
+            const displayEl = document.getElementById('val-' + id);
+            if (displayEl) {
+                let suffix = '';
+                if (id.includes('timeDiv')) suffix = ' ms/div';
+                else if (id === 'freq') suffix = ' Hz';
+                else if (id.includes('burstFreq')) suffix = ' Hz';
+                else if (id.includes('timeShift')) suffix = ' ms';
+                else if (id.includes('posY')) suffix = ' div';
+                else if (id.includes('vDiv')) suffix = ' V/div';
+                else if (id.includes('duty')) suffix = ' %';
+                else if (id.includes('burstDuration')) suffix = ' ms';
+                else if (id.includes('burstGap')) suffix = ' ms';
+                else suffix = ' V';
+                displayEl.textContent = state[id] + suffix;
+            }
+
+            needsRedraw = true;
+        }
+
+        const inputIds = [
+            'timeDiv', 'vDiv1', 'vDiv2', 'posY1', 'posY2',
+            'freq', 'type1', 'amp1', 'off1', 'timeShift1', 'duty1', 
+            'burstDuration1', 'burstGap1', 'burstFreq1',
+            'type2', 'amp2', 'off2', 'timeShift2', 'duty2', 
+            'burstDuration2', 'burstGap2', 'burstFreq2'
+        ];
+        inputIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', (e) => updateParam(id, e.target.value));
+        });
+
+        updateFormSpecificControls(1);
+        updateFormSpecificControls(2);
+        animate();
+    </script>
+</body>
+</html>

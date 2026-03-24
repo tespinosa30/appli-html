@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimuFission : Déchets & Cycle du Combustible</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --panel-bg: #2c3e50;
+            --text-color: #ecf0f1;
+            --accent: #e74c3c;
+            --neutron: #bdc3c7;
+            --rod-color: #7f8c8d;
+            --waste-color: #464646; /* Gris foncé pour les déchets */
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0;
+            background-color: var(--bg-color); color: var(--text-color);
+            display: flex; height: 100vh; overflow: hidden;
+        }
+
+        /* CANVAS */
+        .canvas-container {
+            flex: 1; position: relative; cursor: crosshair;
+            background: radial-gradient(circle at center, #2c3e50 0%, #1a1a1a 100%);
+        }
+        canvas { display: block; }
+        .overlay-instruction {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 1.5rem; color: rgba(255,255,255,0.6); pointer-events: none; text-align: center;
+        }
+
+        /* CONTROLS */
+        .controls-panel {
+            width: 340px; background-color: var(--panel-bg); padding: 20px;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+            display: flex; flex-direction: column; gap: 15px; z-index: 10;
+        }
+
+        h1 { font-size: 1.4rem; margin: 0; text-align: center; border-bottom: 1px solid #465c71; padding-bottom: 10px; }
+        .control-group { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; }
+        label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 5px; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        #rod-slider { accent-color: #95a5a6; }
+
+        button {
+            background-color: var(--accent); color: white; border: none; padding: 10px;
+            border-radius: 6px; font-size: 0.9rem; cursor: pointer; font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #c0392b; }
+        
+        /* Boutons Taille */
+        .scale-selector { display: flex; gap: 5px; margin-bottom: 10px; }
+        .scale-btn {
+            flex: 1; background: #34495e; font-size: 0.8rem; padding: 8px;
+        }
+        .scale-btn.active { background: var(--accent); box-shadow: inset 0 0 5px rgba(0,0,0,0.3); }
+
+        .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; text-align: center; }
+        .stat-box { background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; }
+        .stat-val { font-size: 1.1rem; font-weight: bold; display: block; }
+        .stat-label { font-size: 0.65rem; color: #bdc3c7; }
+
+        #chart-container { height: 120px; background: rgba(255,255,255,0.05); border-radius: 4px; padding: 5px; }
+        footer { margin-top: auto; font-size: 0.7rem; color: #7f8c8d; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div class="canvas-container" id="container">
+        <canvas id="simCanvas"></canvas>
+        <div id="instruction" class="overlay-instruction">
+            🖱️ Cliquez pour injecter des neutrons
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <h1>☢️ Simulation Réacteur</h1>
+
+        <div class="stats">
+            <div class="stat-box">
+                <span class="stat-val" id="neutron-count">0</span>
+                <span class="stat-label">Neutrons</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val" id="fission-count" style="color:var(--accent)">0</span>
+                <span class="stat-label">Fissions</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-val" id="waste-count" style="color:#777">0</span>
+                <span class="stat-label">Déchets</span>
+            </div>
+        </div>
+
+        <div id="chart-container"><canvas id="popChart"></canvas></div>
+
+        <!-- SCALE SELECTOR -->
+        <div class="control-group">
+            <label>Taille des Noyaux (Échelle)</label>
+            <div class="scale-selector">
+                <button class="scale-btn active" onclick="setScale('large', this)">Gros</button>
+                <button class="scale-btn" onclick="setScale('medium', this)">Moyen</button>
+                <button class="scale-btn" onclick="setScale('small', this)">Petit</button>
+            </div>
+        </div>
+
+        <div class="control-group" style="border-left: 4px solid #95a5a6;">
+            <label style="font-weight:bold; color:#fff;">Barres de Contrôle <span id="rod-val">0%</span></label>
+            <input type="range" id="rod-slider" min="0" max="100" value="0">
+        </div>
+
+        <div class="control-group">
+            <label>Densité Uranium <span id="density-val">80%</span></label>
+            <input type="range" id="density-slider" min="10" max="100" value="80" step="5">
+            
+            <label style="margin-top:10px;">Vitesse <span id="speed-val">1.0x</span></label>
+            <input type="range" id="speed-slider" min="0.1" max="3" value="1" step="0.1">
+        </div>
+
+        <button onclick="resetSim()">🔄 Recharger Combustible</button>
+        
+        <footer>Espinosa T. Lycée Albert Einstein</footer>
+    </div>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('container');
+
+    // --- CONFIG ÉCHELLE ---
+    const SCALES = {
+        large:  { nucleus: 12, neutron: 2.5, spacing: 30, speed: 6 },
+        medium: { nucleus: 8,  neutron: 2.0, spacing: 20, speed: 5 },
+        small:  { nucleus: 5,  neutron: 1.5, spacing: 12, speed: 4 }
+    };
+    
+    let currentScale = SCALES.large; 
+
+    // --- GAME STATE ---
+    let nuclei = [];
+    let neutrons = [];
+    let particles = [];
+    let controlRods = [];
+    
+    let fissionsTotal = 0;
+    let wasteTotal = 0;
+    let absorbedTotal = 0;
+    let timeScale = 1.0;
+    let rodInsertion = 0.0;
+    let animationId;
+    let frameCount = 0;
+
+    // Chart
+    let chart;
+    const chartCtx = document.getElementById('popChart').getContext('2d');
+
+    /* --- CLASSES --- */
+    class ControlRod {
+        constructor(x, width, maxHeight) {
+            this.x = x; this.y = 0; this.width = width; this.maxHeight = maxHeight; this.currentHeight = 0;
+        }
+        update() {
+            const targetH = this.maxHeight * rodInsertion;
+            this.currentHeight += (targetH - this.currentHeight) * 0.1;
+        }
+        draw() {
+            ctx.fillStyle = '#7f8c8d';
+            const grad = ctx.createLinearGradient(this.x, 0, this.x + this.width, 0);
+            grad.addColorStop(0, '#95a5a6'); grad.addColorStop(0.5, '#7f8c8d'); grad.addColorStop(1, '#34495e');
+            ctx.fillStyle = grad;
+            ctx.fillRect(this.x, 0, this.width, this.currentHeight);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(this.x, this.currentHeight - 3, this.width, 3);
+        }
+        checkCollision(n) {
+            return (n.x >= this.x && n.x <= this.x + this.width && n.y <= this.currentHeight);
+        }
+    }
+
+    class Nucleus {
+        constructor(x, y) {
+            this.x = x; this.y = y; this.state = 'stable'; this.timer = 0; this.shakeX = 0; this.shakeY = 0;
+            // Rotation aléatoire pour les déchets
+            this.wasteAngle = Math.random() * Math.PI;
+        }
+        draw() {
+            if (this.state === 'waste') {
+                // Dessin des déchets (deux fragments gris foncés)
+                ctx.fillStyle = '#464646'; 
+                
+                // Fragment 1
+                const offset = currentScale.nucleus * 0.4;
+                ctx.beginPath(); 
+                ctx.arc(this.x - offset, this.y, currentScale.nucleus * 0.7, 0, Math.PI * 2); 
+                ctx.fill();
+                
+                // Fragment 2
+                ctx.beginPath(); 
+                ctx.arc(this.x + offset, this.y, currentScale.nucleus * 0.6, 0, Math.PI * 2); 
+                ctx.fill();
+                return;
+            }
+
+            ctx.beginPath();
+            if (this.state === 'hit') {
+                ctx.fillStyle = '#f1c40f'; ctx.shadowBlur = currentScale.nucleus; ctx.shadowColor = '#e67e22';
+                this.shakeX = (Math.random() - 0.5) * (currentScale.nucleus/3); 
+                this.shakeY = (Math.random() - 0.5) * (currentScale.nucleus/3);
+            } else {
+                ctx.fillStyle = '#3498db'; ctx.shadowBlur = 0;
+                this.shakeX = 0; this.shakeY = 0;
+            }
+            ctx.arc(this.x + this.shakeX, this.y + this.shakeY, currentScale.nucleus, 0, Math.PI * 2);
+            ctx.fill(); ctx.shadowBlur = 0;
+            
+            // Reflet pour effet 3D léger
+            if(this.state !== 'hit') {
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.beginPath(); ctx.arc(this.x - currentScale.nucleus*0.3, this.y - currentScale.nucleus*0.3, currentScale.nucleus/3, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        hit() {
+            if (this.state === 'stable') {
+                this.state = 'hit'; this.timer = 10; 
+            }
+        }
+        update() {
+            if (this.state === 'hit') {
+                this.timer -= timeScale;
+                if (this.timer <= 0) this.fission();
+            }
+        }
+        fission() {
+            this.state = 'waste'; // Changement d'état vers déchet
+            fissionsTotal++; wasteTotal++; updateStats();
+            particles.push(new Flash(this.x, this.y));
+            const neutronCount = Math.random() > 0.5 ? 3 : 2;
+            for (let i = 0; i < neutronCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                neutrons.push(new Neutron(this.x, this.y, Math.cos(angle)*currentScale.speed, Math.sin(angle)*currentScale.speed));
+            }
+        }
+    }
+
+    class Neutron {
+        constructor(x, y, vx, vy) {
+            this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.active = true;
+        }
+        update() {
+            this.x += this.vx * timeScale; this.y += this.vy * timeScale;
+            if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) this.active = false;
+        }
+        draw() {
+            ctx.beginPath(); ctx.fillStyle = '#bdc3c7';
+            ctx.arc(this.x, this.y, currentScale.neutron, 0, Math.PI * 2); ctx.fill();
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color, lifeDecay) {
+            this.x = x; this.y = y; this.color = color; this.life = 1.0; this.decay = lifeDecay;
+            const a = Math.random() * Math.PI * 2; const s = Math.random() * 2;
+            this.vx = Math.cos(a)*s; this.vy = Math.sin(a)*s;
+        }
+        update() { this.x += this.vx * timeScale; this.y += this.vy * timeScale; this.life -= this.decay * timeScale; }
+        draw() {
+            ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color;
+            ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+        }
+    }
+    class Flash extends Particle {
+        constructor(x, y) { super(x, y, '#fff', 0.1); this.radius = currentScale.nucleus; }
+        draw() {
+            this.radius += 2; ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = `rgba(255, 200, 50, ${this.life})`;
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+        }
+    }
+
+    /* --- ENGINE --- */
+    function setScale(scaleKey, btn) {
+        currentScale = SCALES[scaleKey];
+        document.querySelectorAll('.scale-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        spawn();
+    }
+
+    function spawn() {
+        nuclei = []; neutrons = []; particles = []; controlRods = [];
+        fissionsTotal = 0; absorbedTotal = 0; wasteTotal = 0;
+        updateStats(); resetChart();
+
+        const density = parseInt(document.getElementById('density-slider').value);
+        const rodSpacing = 100;
+        const rodWidth = 15;
+        const numRods = Math.floor(canvas.width / rodSpacing);
+        for(let i=1; i<numRods; i++) {
+            controlRods.push(new ControlRod(i * rodSpacing, rodWidth, canvas.height));
+        }
+
+        const spacing = currentScale.spacing;
+        const cols = Math.floor(canvas.width / spacing);
+        const rows = Math.floor(canvas.height / spacing);
+        
+        for(let i=0; i<cols; i++) {
+            for(let j=0; j<rows; j++) {
+                let cx = i * spacing + spacing/2;
+                let cy = j * spacing + spacing/2;
+                let overlapsRod = false;
+                for(let rod of controlRods) {
+                    if (cx > rod.x - 5 && cx < rod.x + rod.width + 5) overlapsRod = true;
+                }
+                if (!overlapsRod && Math.random() * 100 < density) {
+                    cx += (Math.random()-0.5) * (spacing/3);
+                    cy += (Math.random()-0.5) * (spacing/3);
+                    nuclei.push(new Nucleus(cx, cy));
+                }
+            }
+        }
+        document.getElementById('instruction').style.display = 'block';
+    }
+
+    function checkCollisions() {
+        const hitDistSq = (currentScale.nucleus + currentScale.neutron + 2)**2;
+        
+        for (let n of neutrons) {
+            if (!n.active) continue;
+            // Barres
+            for (let rod of controlRods) {
+                if (rod.checkCollision(n)) {
+                    n.active = false; absorbedTotal++;
+                    particles.push(new Particle(n.x, n.y, '#7f8c8d', 0.05)); 
+                    break;
+                }
+            }
+            if (!n.active) continue;
+
+            // Noyaux (Uniquement les STABLES, les déchets ne fissionnent pas)
+            for (let nucl of nuclei) {
+                if (nucl.state === 'stable') {
+                    let dx = n.x - nucl.x; 
+                    if (Math.abs(dx) > currentScale.nucleus + 5) continue;
+                    let dy = n.y - nucl.y;
+                    if (Math.abs(dy) > currentScale.nucleus + 5) continue;
+
+                    if (dx*dx + dy*dy < hitDistSq) {
+                        nucl.hit(); n.active = false; break;
+                    }
+                }
+            }
+        }
+    }
+
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // On dessine les noyaux (y compris les déchets)
+        nuclei.forEach(n => { n.update(); n.draw(); });
+        controlRods.forEach(r => { r.update(); r.draw(); });
+        for (let i = neutrons.length - 1; i >= 0; i--) {
+            let n = neutrons[i]; n.update();
+            if (!n.active) neutrons.splice(i, 1); else n.draw();
+        }
+        checkCollisions();
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i]; p.update();
+            if (p.life <= 0) particles.splice(i, 1); else p.draw();
+        }
+        frameCount++;
+        if (frameCount % 10 === 0) {
+            updateStats();
+            if (fissionsTotal > 0) updateChartData();
+        }
+        animationId = requestAnimationFrame(loop);
+    }
+
+    function clickToFire(e) {
+        const rect = canvas.getBoundingClientRect();
+        for(let i=0; i<5; i++) { 
+            let a = Math.random()*Math.PI*2;
+            neutrons.push(new Neutron(e.clientX - rect.left, e.clientY - rect.top, Math.cos(a)*currentScale.speed, Math.sin(a)*currentScale.speed));
+        }
+        document.getElementById('instruction').style.display = 'none';
+    }
+
+    function updateStats() {
+        document.getElementById('neutron-count').innerText = neutrons.length;
+        document.getElementById('fission-count').innerText = fissionsTotal;
+        document.getElementById('waste-count').innerText = wasteTotal;
+    }
+
+    /* --- CHART --- */
+    function initChart() {
+        chart = new Chart(chartCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Neutrons Actifs', data: [], borderColor: '#bdc3c7', borderWidth: 2, pointRadius: 0 }] },
+            options: { 
+                responsive: true, maintainAspectRatio: false, animation: false, 
+                plugins: { legend: { display: true, labels: {color:'#ccc'} } }, 
+                scales: { x: { display: false }, y: { display: true, grid: {color:'#444'} } } 
+            }
+        });
+    }
+    function updateChartData() {
+        chart.data.labels.push(frameCount);
+        chart.data.datasets[0].data.push(neutrons.length);
+        if(chart.data.labels.length > 100) { chart.data.labels.shift(); chart.data.datasets[0].data.shift(); }
+        chart.update();
+    }
+    function resetChart() { chart.data.labels = []; chart.data.datasets[0].data = []; chart.update(); }
+
+    /* --- EVENTS --- */
+    document.getElementById('rod-slider').oninput = function() { rodInsertion = parseInt(this.value) / 100; document.getElementById('rod-val').innerText = this.value + '%'; };
+    document.getElementById('density-slider').oninput = function() { document.getElementById('density-val').innerText = this.value + '%'; spawn(); };
+    document.getElementById('speed-slider').oninput = function() { timeScale = parseFloat(this.value); document.getElementById('speed-val').innerText = timeScale + 'x'; };
+    window.resetSim = spawn;
+    window.addEventListener('resize', () => { canvas.width = container.clientWidth; canvas.height = container.clientHeight; spawn(); });
+    canvas.addEventListener('mousedown', clickToFire);
+
+    initChart(); 
+    canvas.width = container.clientWidth; canvas.height = container.clientHeight;
+    spawn(); loop();
+
+</script>
+</body>
+</html>

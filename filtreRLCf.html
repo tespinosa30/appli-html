@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulation Filtres Passifs Complets (RC, RL, RLC)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; padding: 10px; height: 100vh; overflow: hidden; user-select: none; }
+        .container { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 250px 1fr; gap: 10px; height: 98vh; }
+        .panel { background: white; border-radius: 8px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #3498db; margin-bottom: 5px; padding-bottom: 5px; flex-shrink: 0; }
+        h3 { margin: 0; color: #2c3e50; font-size: 14px; }
+
+        .gbf { grid-row: 1; grid-column: 1; }
+        .circuit { grid-row: 1; grid-column: 2; display: grid; grid-template-columns: 1fr 220px; gap: 10px; }
+        .bode { grid-row: 2; grid-column: 1; }
+        .oscilloscope { grid-row: 2; grid-column: 2; }
+
+        .control-group { margin-bottom: 6px; }
+        .control-group.hidden { display: none; }
+        
+        label { display: block; margin-bottom: 1px; font-size: 11px; font-weight: 600; color: #555; }
+        input[type="range"] { width: 100%; height: 5px; cursor: pointer; display: block; }
+        input[type="number"] { width: 100%; padding: 2px; font-size: 11px; border: 1px solid #ddd; border-radius: 4px; }
+        select { padding: 2px 5px; font-size: 11px; border: 1px solid #ddd; border-radius: 4px; }
+        
+        .circuit-schema-wrapper { position: relative; width: 100%; height: 100%; min-height: 0; }
+        #circuitCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .signature { position: absolute; bottom: 5px; right: 10px; font-size: 10px; color: #bdc3c7; font-style: italic; pointer-events: none; z-index: 10; }
+        .circuit-controls { border-left: 1px solid #eee; padding-left: 10px; display: flex; flex-direction: column; justify-content: center; }
+        
+        .freq-info-block { font-size: 11px; line-height: 1.4; border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; }
+        .sub-freq { color: #7f8c8d; font-size: 10px; margin-left: 10px; display: block; }
+
+        .bode-charts { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 5px; }
+        .bode-chart-container { flex: 1; position: relative; min-height: 0; transition: flex 0.3s ease; }
+        .bode-chart-container.hidden { display: none; }
+        .bode-options-container { display: none; gap: 10px; font-size: 11px; align-items: center; background: #f8f9fa; padding: 2px 8px; border-radius: 4px; }
+        .bode-options-container.visible { display: flex; }
+
+        .oscillo-container { display: flex; flex: 1; min-height: 0; gap: 10px; }
+        .oscillo-view { flex: 1; position: relative; background: #111; border-radius: 4px; cursor: crosshair; }
+        canvas.oscillo-canvas { width: 100%; height: 100%; display: block; }
+        
+        .measure-panel { width: 140px; background: #f8f9fa; border-left: 1px solid #ddd; padding: 5px; font-family: monospace; font-size: 11px; display: flex; flex-direction: column; gap: 5px; overflow-y: auto; }
+        .measure-group { background: white; padding: 5px; border: 1px solid #eee; border-radius: 4px; }
+        .measure-title { font-weight: bold; color: #3498db; margin-bottom: 2px; border-bottom: 1px solid #eee;}
+        .measure-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .measure-delta { color: #e74c3c; font-weight: bold; }
+
+        .osc-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; flex-shrink: 0; }
+        .osc-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; }
+        .checkbox-label { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .timebase-display { font-family: monospace; color: #2980b9; font-weight: bold; font-size: 12px; float: right;}
+
+        .view-toggle {
+            position: absolute; top: 10px; left: 10px; z-index: 20;
+            background: rgba(255,255,255,0.9); border: 1px solid #ccc; padding: 4px 8px;
+            border-radius: 4px; font-size: 11px; cursor: pointer; color: #333;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .view-toggle:hover { background: #fff; color: #3498db; border-color: #3498db; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 1. GBF Panel -->
+        <div class="panel gbf">
+            <div class="panel-header">
+                <h3>Générateur BF</h3>
+            </div>
+            <div style="max-width: 300px;">
+                <div class="control-group">
+                    <label>Type de filtre</label>
+                    <select id="filterType" style="width:100%; padding:5px;">
+                        <option value="RC">Passe-bas (RC)</option>
+                        <option value="CR">Passe-haut (CR)</option>
+                        <option value="RL">Passe-bas (RL)</option>
+                        <option value="LR">Passe-haut (LR)</option>
+                        <option value="RLC">Circuit RLC Série</option>
+                    </select>
+                </div>
+                <div class="control-group hidden" id="groupRLCOutput">
+                    <label>Sortie Us aux bornes de :</label>
+                    <select id="rlcOutputComp" style="width:100%; padding:5px; border-color:#3498db; background:#f0f8ff;">
+                        <option value="R">Résistance (Passe-Bande)</option>
+                        <option value="C">Condensateur (Passe-Bas)</option>
+                        <option value="L">Inductance (Passe-Haut)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Fréquence : <span id="freqValue" style="color:#e74c3c">1.00 kHz</span></label>
+                    <input type="range" id="frequency" min="0" max="9" step="0.01" value="3">
+                </div>
+                <div class="control-group">
+                    <label>Réglage Fin Fréquence (+/- 10%)</label>
+                    <input type="range" id="freqFine" min="-10" max="10" step="0.1" value="0">
+                </div>
+                <div class="control-group">
+                    <label>Amplitude (V)</label>
+                    <input type="number" id="amplitude" value="5" step="0.1">
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Circuit Panel -->
+        <div class="panel circuit">
+            <button id="toggleViewBtn" class="view-toggle">Vue: Schéma</button>
+            <div class="circuit-schema-wrapper">
+                <canvas id="circuitCanvas"></canvas>
+                <div class="signature">Espinosa T. Lycée Albert Einstein</div>
+            </div>
+            <div class="circuit-controls">
+                <div class="control-group">
+                    <label>Résistance R : <span id="rValue">1.00 kΩ</span></label>
+                    <input type="range" id="resistance" min="1.699" max="5" step="0.001" value="3">
+                </div>
+                <div class="control-group hidden" id="groupL">
+                    <label>Inductance L : <span id="lValue">10.0 mH</span></label>
+                    <input type="range" id="inductance" min="-3" max="0.699" step="0.001" value="-2">
+                </div>
+                <div class="control-group" id="groupC">
+                    <label>Capacité C : <span id="cValue">1.00 µF</span></label>
+                    <input type="range" id="capacitance" min="-7.699" max="-4" step="0.001" value="-6">
+                </div>
+                
+                <div class="freq-info-block">
+                    <label style="color:#27ae60"><span id="fcLabel">Fréq. caractéristique</span> : <span id="fcValue">--</span></label>
+                    <span id="fc1Display" class="sub-freq hidden">fc1 = --</span>
+                    <span id="fc2Display" class="sub-freq hidden">fc2 = --</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Bode Panel -->
+        <div class="panel bode">
+            <div class="panel-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <h3>Bode</h3>
+                    <select id="bodeDisplayMode">
+                        <option value="both">Gain & Phase</option>
+                        <option value="gain">Gain seul</option>
+                        <option value="phase">Phase seule</option>
+                    </select>
+                </div>
+                <div id="bodeOptionsContainer" class="bode-options-container">
+                    <label class="checkbox-label"><input type="checkbox" id="showAsymp"> Asymp.</label>
+                    <label class="checkbox-label"><input type="checkbox" id="showBandwidth"> Bande P.</label>
+                </div>
+            </div>
+            <div class="bode-charts">
+                <div id="containerGain" class="bode-chart-container">
+                    <canvas id="bodeGain"></canvas>
+                </div>
+                <div id="containerPhase" class="bode-chart-container">
+                    <canvas id="bodePhase"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Oscilloscope Panel -->
+        <div class="panel oscilloscope">
+            <div class="panel-header">
+                <h3>Oscilloscope</h3>
+                <label class="checkbox-label"><input type="checkbox" id="showCursors"> Curseurs</label>
+            </div>
+            <div class="oscillo-container">
+                <div class="oscillo-view">
+                    <canvas id="oscilloscope" class="oscillo-canvas"></canvas>
+                </div>
+                <div class="measure-panel" id="measurePanel" style="display:none;">
+                    <div class="measure-group">
+                        <div class="measure-title">Temps (X)</div>
+                        <div class="measure-row"><span>T1:</span> <span id="valT1">0</span></div>
+                        <div class="measure-row"><span>T2:</span> <span id="valT2">0</span></div>
+                        <div class="measure-row"><span>Δt:</span> <span class="measure-delta" id="valDT">0</span></div>
+                        <div class="measure-row"><span>1/Δt:</span> <span id="valF">0</span></div>
+                    </div>
+                    <div class="measure-group">
+                        <div class="measure-title">Tension (Y)</div>
+                        <div class="measure-row"><span>V1:</span> <span id="valV1">0</span></div>
+                        <div class="measure-row"><span>V2:</span> <span id="valV2">0</span></div>
+                        <div class="measure-row"><span>ΔV:</span> <span class="measure-delta" id="valDV">0</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="osc-controls">
+                <div>
+                    <label>Base de temps <span id="timebaseDisplay" class="timebase-display">2 ms/div</span></label>
+                    <input type="range" id="timebaseSlider" min="0" max="10" step="1" value="5">
+                </div>
+                <div>
+                    <label>Calibre V/div</label>
+                    <select id="voltDiv" style="width:100%; padding:4px;">
+                        <option value="0.01">10 mV</option>
+                        <option value="0.05">50 mV</option>
+                        <option value="0.1">0.1 V</option>
+                        <option value="0.5">0.5 V</option>
+                        <option value="1">1 V</option>
+                        <option value="2" selected>2 V</option>
+                        <option value="5">5 V</option>
+                        <option value="10">10 V</option>
+                        <option value="20">20 V</option>
+                    </select>
+                </div>
+            </div>
+            <div class="osc-footer">
+                <label class="checkbox-label" style="background: #e8f5e9; padding: 5px 10px; border-radius: 4px; color: #2e7d32;">
+                    <input type="checkbox" id="autosetCheck"> Autoset Continu
+                </label>
+                <div style="display:flex; gap:10px;">
+                    <label class="checkbox-label" style="color: #f1c40f;"><input type="checkbox" id="showUe" checked> Ue</label>
+                    <label class="checkbox-label" style="color: #2ecc71;"><input type="checkbox" id="showUs" checked> Us</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTES ---
+        const TIMEBASES = []; const mults = [1, 2, 5];
+        for(let e = -10; e <= 0; e++) { for(let m of mults) { let val = m * Math.pow(10, e); if(val <= 2) TIMEBASES.push(val); }}
+        document.getElementById('timebaseSlider').max = TIMEBASES.length - 1;
+
+        let state = { R: 1000, C: 1e-6, L: 0.01, baseFreq: 1000, freq: 1000, amp: 5, type: 'RC', rlcOut: 'R', timebaseIdx: 0, voltDiv: 2, view: 'circuit' };
+        let cursors = { t1: 0, t2: 0.001, v1: 2, v2: -2, dragging: null };
+
+        // --- HELPERS ---
+        const formatFreq = f => f >= 1e9 ? (f/1e9).toFixed(2)+'G' : f >= 1e6 ? (f/1e6).toFixed(2)+'M' : f >= 1e3 ? (f/1e3).toFixed(2)+'k' : f.toFixed(0);
+        const formatR = r => r >= 1e3 ? (r/1e3).toFixed(2)+' kΩ' : r.toFixed(0)+' Ω';
+        const formatC = c => c >= 1e-6 ? (c*1e6).toFixed(2)+' µF' : (c*1e9).toFixed(2)+' nF';
+        const formatL = l => l >= 1 ? l.toFixed(2)+' H' : (l*1e3).toFixed(2)+' mH';
+        const formatTime = t => t < 1e-6 ? (t*1e9).toFixed(0)+' ns/div' : t < 1e-3 ? (t*1e6).toFixed(0)+' µs/div' : t < 1 ? (t*1e3).toFixed(0)+' ms/div' : t.toFixed(1)+' s/div';
+        const formatMeasureT = t => { const a=Math.abs(t); return a<1e-6?(t*1e9).toFixed(1)+'ns':a<1e-3?(t*1e6).toFixed(1)+'µs':a<1?(t*1e3).toFixed(1)+'ms':t.toFixed(3)+'s'; };
+
+        function getTransferFunction(f, R, C, L, type, rlcOut) {
+            const w = 2 * Math.PI * f;
+            if (type === 'RC') { // Passe-bas RC
+                const rc = R * C; const x = w * rc;
+                const gain = 1 / Math.sqrt(1 + x*x); const phase = -Math.atan(x);
+                return { gain, phase, fc: 1/(2*Math.PI*rc), f0: null, Q: null };
+            } 
+            else if (type === 'CR') { // Passe-haut CR
+                const rc = R * C; const x = w * rc;
+                const gain = x / Math.sqrt(1 + x*x); const phase = (Math.PI/2) - Math.atan(x);
+                return { gain, phase, fc: 1/(2*Math.PI*rc), f0: null, Q: null };
+            }
+            else if (type === 'RL') { // Passe-bas RL (Us sur R) - NON, RL c'est Us sur R généralement ?
+                // Si RL (série), Ue aux bornes de R+L. Si c'est un passe-bas, Us est sur R ?
+                // Circuit RL série classique : L en série, R en sortie (terre). C'est un Passe-Bas.
+                // H = R / (R + jLw) = 1 / (1 + j(L/R)w).
+                const tau = L / R; const x = w * tau;
+                const gain = 1 / Math.sqrt(1 + x*x); const phase = -Math.atan(x);
+                return { gain, phase, fc: 1/(2*Math.PI*tau), f0: null, Q: null };
+            }
+            else if (type === 'LR') { // Passe-haut LR
+                // Circuit RL série : R en série, L en sortie. C'est un Passe-Haut.
+                // H = jLw / (R + jLw) = j(L/R)w / (1 + j(L/R)w).
+                const tau = L / R; const x = w * tau;
+                const gain = x / Math.sqrt(1 + x*x); const phase = (Math.PI/2) - Math.atan(x);
+                return { gain, phase, fc: 1/(2*Math.PI*tau), f0: null, Q: null };
+            }
+            else { // RLC
+                const w0 = 1 / Math.sqrt(L * C); const Q = (1/R) * Math.sqrt(L/C); const x = w / w0;
+                const denomRe = 1 - x*x; const denomIm = x / Q;
+                const denomMag = Math.sqrt(denomRe*denomRe + denomIm*denomIm);
+                const denomArg = Math.atan2(denomIm, denomRe);
+                let numMag, numArg;
+                if (rlcOut === 'R') { numMag = x / Q; numArg = Math.PI / 2; } 
+                else if (rlcOut === 'C') { numMag = 1; numArg = 0; } 
+                else { numMag = x*x; numArg = Math.PI; }
+                const gain = numMag / denomMag; const phase = numArg - denomArg;
+                return { gain, phase, fc: null, f0: w0/(2*Math.PI), Q: Q };
+            }
+        }
+
+        // --- CIRCUIT (CORRECTION DESSIN) ---
+        function drawComponent(ctx, type, x, y, rotation, label) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(rotation);
+            ctx.beginPath();
+            if(type === 'R') {
+                ctx.moveTo(-20, 0); ctx.lineTo(-10, 0); ctx.stroke(); ctx.strokeRect(-10, -5, 20, 10); ctx.moveTo(10, 0); ctx.lineTo(20, 0); ctx.stroke(); ctx.fillText(label, 0, -10);
+            } else if(type === 'C') {
+                ctx.moveTo(-20, 0); ctx.lineTo(-2, 0); ctx.stroke(); ctx.moveTo(-2, -10); ctx.lineTo(-2, 10); ctx.stroke(); ctx.moveTo(2, -10); ctx.lineTo(2, 10); ctx.stroke(); ctx.moveTo(2, 0); ctx.lineTo(20, 0); ctx.stroke(); ctx.fillText(label, 0, -12);
+            } else if(type === 'L') {
+                ctx.moveTo(-20, 0); ctx.lineTo(-15, 0); ctx.stroke(); ctx.beginPath(); for(let i=0; i<3; i++) ctx.arc(-10 + i*10, 0, 5, Math.PI, 0); ctx.stroke(); ctx.moveTo(15, 0); ctx.lineTo(20, 0); ctx.stroke(); ctx.fillText(label, 0, -8);
+            }
+            ctx.restore();
+        }
+
+        function drawCircuit() {
+            const cvs = document.getElementById('circuitCanvas'); const ctx = cvs.getContext('2d');
+            cvs.width = cvs.parentElement.clientWidth; cvs.height = cvs.parentElement.clientHeight;
+            const w = cvs.width; const h = cvs.height;
+            ctx.clearRect(0,0,w,h); ctx.lineWidth=2; ctx.strokeStyle='#333'; ctx.fillStyle='#333'; ctx.font='bold 12px Arial'; ctx.textAlign='center';
+            
+            if(state.view === 'fresnel' && state.type === 'RLC') { drawFresnel(ctx, w, h); return; }
+            else if (state.view === 'fresnel') { ctx.fillText("Fresnel disponible uniquement en RLC", w/2, h/2); return; }
+
+            const cy=h/2+10, cx=w/2, xIn=cx-100, xOut=cx+100, yTop=cy-40, yBot=cy+40;
+            ctx.beginPath(); ctx.moveTo(xIn, yBot); ctx.lineTo(xOut, yBot); ctx.stroke(); ctx.beginPath(); ctx.moveTo(xIn, yTop);
+
+            // Définition des composants selon le type
+            let compSerie, compDeriv;
+            let isDoubleSerie = false;
+
+            if (state.type === 'RC') { compSerie = 'R'; compDeriv = 'C'; }
+            else if (state.type === 'CR') { compSerie = 'C'; compDeriv = 'R'; }
+            else if (state.type === 'RL') { compSerie = 'L'; compDeriv = 'R'; } // Passe-Bas : L série, R masse
+            else if (state.type === 'LR') { compSerie = 'R'; compDeriv = 'L'; } // Passe-Haut : R série, L masse
+            else { isDoubleSerie = true; } // RLC
+
+            if (!isDoubleSerie) {
+                // Série
+                ctx.lineTo(cx-20, yTop); ctx.stroke(); 
+                drawComponent(ctx, compSerie, cx, yTop, 0, compSerie);
+                ctx.beginPath(); ctx.moveTo(cx+20, yTop); ctx.lineTo(xOut, yTop); ctx.stroke();
+                
+                // Dérivation
+                ctx.beginPath(); ctx.moveTo(cx+60, yTop); ctx.lineTo(cx+60, yTop+15); ctx.stroke(); 
+                drawComponent(ctx, compDeriv, cx+60, yTop+35, Math.PI/2, compDeriv);
+                ctx.beginPath(); ctx.moveTo(cx+60, yTop+55); ctx.lineTo(cx+60, yBot); ctx.stroke();
+
+            } else { // RLC
+                let comp1, comp2, compOut;
+                if(state.rlcOut === 'R') { comp1='L'; comp2='C'; compOut='R'; } else if(state.rlcOut === 'C') { comp1='R'; comp2='L'; compOut='C'; } else { comp1='R'; comp2='C'; compOut='L'; }
+                
+                ctx.lineTo(cx-50, yTop); ctx.stroke(); 
+                drawComponent(ctx, comp1, cx-30, yTop, 0, comp1);
+                ctx.beginPath(); ctx.moveTo(cx-10, yTop); ctx.lineTo(cx+10, yTop); ctx.stroke();
+                drawComponent(ctx, comp2, cx+30, yTop, 0, comp2);
+                ctx.beginPath(); ctx.moveTo(cx+50, yTop); ctx.lineTo(xOut, yTop); ctx.stroke();
+
+                ctx.beginPath(); ctx.moveTo(cx+60, yTop); ctx.lineTo(cx+60, yTop+15); ctx.stroke();
+                drawComponent(ctx, compOut, cx+60, yTop+35, Math.PI/2, compOut);
+                ctx.beginPath(); ctx.moveTo(cx+60, yTop+55); ctx.lineTo(cx+60, yBot); ctx.stroke();
+            }
+            drawArrow(ctx, xIn+10, yBot, yTop, '#f1c40f', 'Ue'); drawArrow(ctx, xOut-10, yBot, yTop, '#2ecc71', 'Us');
+        }
+        function drawArrow(ctx, x, y1, y2, c, l) {
+            ctx.strokeStyle=c; ctx.fillStyle=c; ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y2); ctx.lineTo(x-4, y2+8); ctx.lineTo(x+4, y2+8); ctx.fill(); ctx.fillText(l, x, y2-5);
+        }
+
+        // --- FRESNEL ---
+        function drawFresnel(ctx, w, h) {
+            const omega = 2 * Math.PI * state.freq;
+            const Z_real = state.R; const Z_imag = (state.L * omega) - (1 / (state.C * omega));
+            const Z_mod = Math.sqrt(Z_real*Z_real + Z_imag*Z_imag);
+            const maxRadius = Math.min(w, h) * 0.4;
+            const vR = state.R; const vL = state.L * omega; const vC = 1 / (state.C * omega); const vGen = Z_mod;
+            const maxV = Math.max(vR, vL, vC, vGen); const scale = maxRadius / maxV;
+            const cx = w/2, cy = h/2;
+
+            ctx.strokeStyle = '#eee'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, maxRadius, 0, 2*Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx, cy-maxRadius); ctx.lineTo(cx, cy+maxRadius); ctx.moveTo(cx-maxRadius, cy); ctx.lineTo(cx+maxRadius, cy); ctx.stroke();
+
+            ctx.strokeStyle = '#aaa'; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + 40, cy); ctx.stroke(); ctx.fillText("I (ref)", cx + 45, cy+4); ctx.setLineDash([]); ctx.lineWidth = 2;
+
+            const drawVec = (mag, angle, color, label) => {
+                const len = mag * scale; const vx = len * Math.cos(angle); const vy = -len * Math.sin(angle);
+                ctx.strokeStyle = color; ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx+vx, cy+vy); ctx.stroke();
+                const head = 6; const angleHead = Math.atan2(vy, vx);
+                ctx.beginPath(); ctx.moveTo(cx+vx, cy+vy); ctx.lineTo(cx+vx - head*Math.cos(angleHead-Math.PI/6), cy+vy - head*Math.sin(angleHead-Math.PI/6)); ctx.lineTo(cx+vx - head*Math.cos(angleHead+Math.PI/6), cy+vy - head*Math.sin(angleHead+Math.PI/6)); ctx.fill(); ctx.fillText(label, cx+vx + 10, cy+vy);
+            };
+
+            drawVec(vR, 0, '#e74c3c', 'Ur');
+            drawVec(vL, Math.PI/2, '#8e44ad', 'Ul');
+            drawVec(vC, -Math.PI/2, '#27ae60', 'Uc');
+            const angleGen = Math.atan2(Z_imag, Z_real);
+            drawVec(vGen, angleGen, '#f1c40f', 'Ugen');
+            
+            ctx.fillStyle = '#555'; ctx.fillText(`Échelle: 100% = ${maxV.toFixed(1)} $\\Omega \\cdot I$`, 10, h-10);
+        }
+
+        // --- BODE ---
+        let chartGain, chartPhase;
+        const bandwidthPlugin = {
+            id: 'bandwidthPlugin',
+            beforeDraw: (chart) => {
+                if (!document.getElementById('showBandwidth').checked) return;
+                if (chart.canvas.id !== 'bodeGain') return;
+                const ctx = chart.ctx; const xAxis = chart.scales.x; const yAxis = chart.scales.y;
+                const tfInfo = getTransferFunction(1, state.R, state.C, state.L, state.type, state.rlcOut);
+                let xStart, xEnd;
+                // Passe-bas (RC ou RL)
+                if (state.type === 'RC' || state.type === 'RL' || (state.type==='RLC' && state.rlcOut==='C')) { 
+                    const fc = (state.type==='RC'||state.type==='RL')?tfInfo.fc:tfInfo.f0; xStart = xAxis.getPixelForValue(1); xEnd = xAxis.getPixelForValue(fc); 
+                } 
+                // Passe-haut (CR ou LR)
+                else if (state.type === 'CR' || state.type === 'LR' || (state.type==='RLC' && state.rlcOut==='L')) {
+                    const fc = (state.type==='CR'||state.type==='LR')?tfInfo.fc:tfInfo.f0; xStart = xAxis.getPixelForValue(fc); xEnd = xAxis.getPixelForValue(1e9); 
+                } else {
+                    const f0 = tfInfo.f0; const Q = tfInfo.Q;
+                    const f1 = f0 * (Math.sqrt(1 + 1/(4*Q*Q)) - 1/(2*Q));
+                    const f2 = f0 * (Math.sqrt(1 + 1/(4*Q*Q)) + 1/(2*Q));
+                    xStart = xAxis.getPixelForValue(f1); xEnd = xAxis.getPixelForValue(f2);
+                }
+                ctx.save(); ctx.fillStyle = 'rgba(46, 204, 113, 0.2)'; ctx.fillRect(xStart, yAxis.top, xEnd - xStart, yAxis.bottom - yAxis.top); ctx.restore();
+            }
+        };
+
+        function initBodeCharts() {
+            const logScales = { x: { type: 'logarithmic', min: 1, max: 1e9, ticks: { callback: v => Math.log10(v)%1===0?formatFreq(v):'', autoSkip: false, maxRotation: 0 }, grid: { color: c => Math.log10(c.tick.value)%1===0?'#bbb':'#eee' } } };
+            const common = { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, interaction: { mode: 'nearest', intersect: false }, elements: { point: { radius: 0 } }, scales: logScales };
+            chartGain = new Chart(document.getElementById('bodeGain'), { type: 'line', data: { datasets: [] }, plugins: [bandwidthPlugin], options: { ...common, scales: { ...common.scales, y: { title: {display: false} } } } });
+            chartPhase = new Chart(document.getElementById('bodePhase'), { type: 'line', data: { datasets: [{ borderColor: '#2ecc71', borderWidth: 2, data: [] }, { pointRadius: 6, pointBackgroundColor: '#e74c3c', showLine: false, data: [] }] }, options: { ...common, scales: { ...common.scales, y: { title: {display: false} } } } });
+        }
+
+        function updateBodeCurves() {
+            const displayMode = document.getElementById('bodeDisplayMode').value;
+            const isGainOnly = displayMode === 'gain';
+            const showAsymp = isGainOnly && document.getElementById('showAsymp').checked;
+            const tfInfo = getTransferFunction(1, state.R, state.C, state.L, state.type, state.rlcOut);
+            const refF = state.type === 'RLC' ? tfInfo.f0 : tfInfo.fc;
+            
+            const lbl = document.getElementById('fcLabel');
+            const val = document.getElementById('fcValue');
+            const fc1Disp = document.getElementById('fc1Display');
+            const fc2Disp = document.getElementById('fc2Display');
+
+            fc1Disp.classList.add('hidden');
+            fc2Disp.classList.add('hidden');
+
+            if(state.type === 'RLC') { 
+                lbl.textContent = "Fréq. résonance f0"; 
+                val.textContent = formatFreq(refF); 
+                if(state.rlcOut === 'R') {
+                    const Q = tfInfo.Q; const f0 = refF;
+                    const f1 = f0 * (Math.sqrt(1 + 1/(4*Q*Q)) - 1/(2*Q));
+                    const f2 = f0 * (Math.sqrt(1 + 1/(4*Q*Q)) + 1/(2*Q));
+                    fc1Disp.classList.remove('hidden'); fc1Disp.textContent = "f_c1 = " + formatFreq(f1);
+                    fc2Disp.classList.remove('hidden'); fc2Disp.textContent = "f_c2 = " + formatFreq(f2);
+                }
+            } else { lbl.textContent = "Fréq. de coupure fc"; val.textContent = formatFreq(refF); }
+
+            let points = [];
+            if (state.type !== 'RLC') { for (let i = 0; i <= 9; i += 0.1) points.push({ f: Math.pow(10, i) }); } 
+            else {
+                for (let i = 0; i <= 9; i += 0.1) points.push({ f: Math.pow(10, i) });
+                const Q = tfInfo.Q; const steps = Math.min(500, Math.max(50, Q * 20)); const logStart = Math.log10(refF / 5); const logEnd = Math.log10(refF * 5); const stepSize = (logEnd - logStart) / steps;
+                for (let i = 0; i <= steps; i++) points.push({ f: Math.pow(10, logStart + i * stepSize) });
+                points.sort((a,b) => a.f - b.f);
+            }
+
+            points = points.map(p => { const t = getTransferFunction(p.f, state.R, state.C, state.L, state.type, state.rlcOut); return { f: p.f, g: 20 * Math.log10(t.gain), p: t.phase * 180 / Math.PI }; });
+
+            const asympPoints = [];
+            if(showAsymp) {
+                const peakAsympDB = (state.type === 'RLC' && state.rlcOut === 'R') ? -20 * Math.log10(tfInfo.Q) : 0;
+                for (let i = 0; i <= 9; i += 0.1) {
+                    const f = Math.pow(10, i); let asG = 0;
+                    // Passe-Bas (1er ou 2nd)
+                    if(state.type === 'RC' || state.type === 'RL' || (state.type==='RLC' && state.rlcOut==='C')) { 
+                        const slope = (state.type==='RC'||state.type==='RL') ? 1 : 2; if(f >= refF) asG = -20 * slope * Math.log10(f/refF); 
+                    } 
+                    // Passe-Haut (1er ou 2nd)
+                    else if (state.type === 'CR' || state.type === 'LR' || (state.type==='RLC' && state.rlcOut==='L')) { 
+                        const slope = (state.type==='CR'||state.type==='LR') ? 1 : 2; if(f <= refF) asG = 20 * slope * Math.log10(f/refF); 
+                    } 
+                    // Passe-Bande
+                    else { if (f < refF) asG = 20 * Math.log10(f/refF) + peakAsympDB; else asG = -20 * Math.log10(f/refF) + peakAsympDB; }
+                    asympPoints.push({x: f, y: asG});
+                }
+            }
+
+            const realCurveColor = showAsymp ? 'rgba(52, 152, 219, 0.3)' : '#3498db';
+            const datasetsG = [{ data: points.map(p => ({x: p.f, y: p.g})), borderColor: realCurveColor, borderWidth: 2, order: 10 }, { data: [], pointRadius: 6, pointBackgroundColor: '#e74c3c', showLine: false, order: 1 }];
+            if(showAsymp) datasetsG.push({ data: asympPoints, borderColor: '#000000', borderDash: [5, 5], borderWidth: 2, pointRadius: 0, order: 20 });
+            chartGain.data.datasets = datasetsG; chartPhase.data.datasets[0].data = points.map(p => ({x: p.f, y: p.p}));
+            chartGain.update(); chartPhase.update();
+        }
+
+        function updateOperatingPoint() {
+            const t = getTransferFunction(state.freq, state.R, state.C, state.L, state.type, state.rlcOut);
+            if(chartGain.data.datasets[1]) chartGain.data.datasets[1].data = [{x: state.freq, y: 20 * Math.log10(t.gain)}]; chartGain.update('none');
+            chartPhase.data.datasets[1].data = [{x: state.freq, y: t.phase * 180 / Math.PI}]; chartPhase.update('none');
+        }
+
+        // --- OSCILLO ---
+        function drawOscillo() {
+            const cvs = document.getElementById('oscilloscope'); const ctx = cvs.getContext('2d');
+            const w = cvs.width = cvs.parentElement.clientWidth; const h = cvs.height = cvs.parentElement.clientHeight;
+            ctx.fillStyle = '#000'; ctx.fillRect(0,0,w,h);
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.beginPath();
+            for(let i=0; i<=10; i++) { const x = i*(w/10); ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+            for(let i=0; i<=8; i++) { const y = i*(h/8); ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke();
+            ctx.strokeStyle = '#666'; ctx.beginPath(); ctx.moveTo(w/2, 0); ctx.lineTo(w/2, h); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+            const pps = w / (TIMEBASES[state.timebaseIdx] * 10); const ppv = (h/8) / state.voltDiv;
+            const wCalc = 2 * Math.PI * state.freq;
+            const tf = getTransferFunction(state.freq, state.R, state.C, state.L, state.type, state.rlcOut);
+            
+            ctx.lineWidth = 2;
+            if(document.getElementById('showUe').checked) {
+                ctx.strokeStyle = '#f1c40f'; ctx.beginPath();
+                for(let x=0; x<w; x++) { const val = state.amp * Math.sin(wCalc * (x - w/2)/pps); const y = h/2 - val * ppv; if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); } ctx.stroke();
+            }
+            if(document.getElementById('showUs').checked) {
+                ctx.strokeStyle = '#2ecc71'; ctx.beginPath();
+                for(let x=0; x<w; x++) { const val = (state.amp * tf.gain) * Math.sin(wCalc * (x - w/2)/pps + tf.phase); const y = h/2 - val * ppv; if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); } ctx.stroke();
+            }
+
+            if(document.getElementById('showCursors').checked) {
+                updateMeasurePanel();
+                const xt1 = cursors.t1 * pps + w/2, xt2 = cursors.t2 * pps + w/2;
+                const yv1 = h/2 - cursors.v1 * ppv, yv2 = h/2 - cursors.v2 * ppv;
+                ctx.setLineDash([5, 3]); ctx.font = '11px Arial';
+                ctx.strokeStyle='#e74c3c'; ctx.beginPath(); ctx.moveTo(xt1,0); ctx.lineTo(xt1,h); ctx.stroke(); ctx.fillStyle='#e74c3c'; ctx.fillText("T1",xt1+2,10);
+                ctx.strokeStyle='#ff7675'; ctx.beginPath(); ctx.moveTo(xt2,0); ctx.lineTo(xt2,h); ctx.stroke(); ctx.fillStyle='#ff7675'; ctx.fillText("T2",xt2+2,25);
+                ctx.strokeStyle='#3498db'; ctx.beginPath(); ctx.moveTo(0,yv1); ctx.lineTo(w,yv1); ctx.stroke(); ctx.fillStyle='#3498db'; ctx.fillText("V1",5,yv1-2);
+                ctx.strokeStyle='#74b9ff'; ctx.beginPath(); ctx.moveTo(0,yv2); ctx.lineTo(w,yv2); ctx.stroke(); ctx.fillStyle='#74b9ff'; ctx.fillText("V2",30,yv2-2);
+                ctx.setLineDash([]);
+            }
+        }
+
+        function updateMeasurePanel() {
+            document.getElementById('valT1').textContent = formatMeasureT(cursors.t1);
+            document.getElementById('valT2').textContent = formatMeasureT(cursors.t2);
+            const dt = Math.abs(cursors.t2 - cursors.t1);
+            document.getElementById('valDT').textContent = formatMeasureT(dt);
+            document.getElementById('valF').textContent = dt>0?formatFreq(1/dt):'Inf';
+            document.getElementById('valV1').textContent = cursors.v1.toFixed(2)+' V';
+            document.getElementById('valV2').textContent = cursors.v2.toFixed(2)+' V';
+            document.getElementById('valDV').textContent = Math.abs(cursors.v1-cursors.v2).toFixed(2)+' V';
+        }
+
+        const oscView = document.querySelector('.oscillo-view');
+        oscView.addEventListener('mousedown', e => {
+            if(!document.getElementById('showCursors').checked) return;
+            const r = document.getElementById('oscilloscope').getBoundingClientRect();
+            const mx = e.clientX - r.left, my = e.clientY - r.top; const w = r.width, h = r.height;
+            const pps = w/(TIMEBASES[state.timebaseIdx]*10), ppv = (h/8)/state.voltDiv;
+            const xt1 = cursors.t1*pps+w/2, xt2 = cursors.t2*pps+w/2, yv1 = h/2-cursors.v1*ppv, yv2 = h/2-cursors.v2*ppv;
+            if(Math.abs(mx-xt1)<10) cursors.dragging='t1'; else if(Math.abs(mx-xt2)<10) cursors.dragging='t2';
+            else if(Math.abs(my-yv1)<10) cursors.dragging='v1'; else if(Math.abs(my-yv2)<10) cursors.dragging='v2';
+        });
+        window.addEventListener('mousemove', e => {
+            if(!cursors.dragging) return;
+            const cvs = document.getElementById('oscilloscope'); const r = cvs.getBoundingClientRect();
+            const mx = Math.max(0,Math.min(cvs.width, e.clientX-r.left)), my = Math.max(0,Math.min(cvs.height, e.clientY-r.top));
+            const pps = cvs.width/(TIMEBASES[state.timebaseIdx]*10), ppv = (cvs.height/8)/state.voltDiv;
+            if(cursors.dragging==='t1') cursors.t1=(mx-cvs.width/2)/pps; if(cursors.dragging==='t2') cursors.t2=(mx-cvs.width/2)/pps;
+            if(cursors.dragging==='v1') cursors.v1=(cvs.height/2-my)/ppv; if(cursors.dragging==='v2') cursors.v2=(cvs.height/2-my)/ppv;
+            drawOscillo();
+        });
+        window.addEventListener('mouseup', () => cursors.dragging = null);
+
+        function runAutoset() {
+            const tf = getTransferFunction(state.freq, state.R, state.C, state.L, state.type, state.rlcOut);
+            const maxV = state.amp * Math.max(1, tf.gain);
+            const vOpt = [0.01,0.05,0.1,0.5,1,2,5,10,20];
+            let bestV=20; for(let v of vOpt) if(v>=maxV/3){bestV=v;break;}
+            state.voltDiv=bestV; document.getElementById('voltDiv').value=bestV;
+            const target = (1/state.freq)*4/10; let bestI=0, minD=Infinity;
+            TIMEBASES.forEach((v,i)=>{ const d=Math.abs(Math.log10(v)-Math.log10(target)); if(d<minD){minD=d;bestI=i;} });
+            state.timebaseIdx=bestI; document.getElementById('timebaseSlider').value=bestI;
+            document.getElementById('timebaseDisplay').textContent=formatTime(TIMEBASES[bestI]);
+        }
+
+        function updateSystem(src) {
+            state.type = document.getElementById('filterType').value;
+            state.rlcOut = document.getElementById('rlcOutputComp').value;
+
+            // Visibility Logic
+            if(state.type === 'RLC') {
+                document.getElementById('groupL').classList.remove('hidden');
+                document.getElementById('groupC').classList.remove('hidden');
+                document.getElementById('groupRLCOutput').classList.remove('hidden');
+                document.getElementById('toggleViewBtn').classList.remove('hidden');
+            } else if (state.type === 'RL' || state.type === 'LR') {
+                document.getElementById('groupL').classList.remove('hidden');
+                document.getElementById('groupC').classList.add('hidden'); // Pas de C
+                document.getElementById('groupRLCOutput').classList.add('hidden');
+                document.getElementById('toggleViewBtn').classList.add('hidden');
+                state.view = 'circuit'; document.getElementById('toggleViewBtn').textContent = "Vue: Schéma";
+            } else { // RC, CR
+                document.getElementById('groupL').classList.add('hidden');
+                document.getElementById('groupC').classList.remove('hidden');
+                document.getElementById('groupRLCOutput').classList.add('hidden');
+                document.getElementById('toggleViewBtn').classList.add('hidden');
+                state.view = 'circuit'; document.getElementById('toggleViewBtn').textContent = "Vue: Schéma";
+            }
+
+            if(src === 'freq') { state.baseFreq = Math.pow(10, parseFloat(document.getElementById('frequency').value)); document.getElementById('freqFine').value = 0; state.freq = state.baseFreq; } 
+            else if (src === 'freqFine') { const finePercent = parseFloat(document.getElementById('freqFine').value); state.freq = state.baseFreq * (1 + finePercent/100); } 
+            else if (src === 'init') { state.baseFreq = Math.pow(10, parseFloat(document.getElementById('frequency').value)); state.freq = state.baseFreq; }
+            
+            document.getElementById('freqValue').textContent=formatFreq(state.freq);
+            state.R = Math.pow(10, parseFloat(document.getElementById('resistance').value)); document.getElementById('rValue').textContent=formatR(state.R);
+            state.C = Math.pow(10, parseFloat(document.getElementById('capacitance').value)); document.getElementById('cValue').textContent=formatC(state.C);
+            state.L = Math.pow(10, parseFloat(document.getElementById('inductance').value)); document.getElementById('lValue').textContent=formatL(state.L);
+            state.amp = parseFloat(document.getElementById('amplitude').value);
+
+            const needsBode = (src==='init'||src==='circuit'||src==='type'||src==='bodeOpt'||src==='rlcOut');
+            if(src==='init'||src==='circuit'||src==='type'||src==='rlcOut'||src==='freq'||src==='freqFine') drawCircuit();
+            if(needsBode) updateBodeCurves();
+            if(document.getElementById('autosetCheck').checked) runAutoset();
+            updateOperatingPoint(); drawOscillo();
+        }
+
+        document.getElementById('filterType').addEventListener('change', ()=>updateSystem('type'));
+        document.getElementById('rlcOutputComp').addEventListener('change', ()=>updateSystem('rlcOut'));
+        document.getElementById('frequency').addEventListener('input', ()=>updateSystem('freq'));
+        document.getElementById('freqFine').addEventListener('input', ()=>updateSystem('freqFine'));
+        ['resistance','capacitance','inductance','amplitude'].forEach(id=>{ document.getElementById(id).addEventListener('input', ()=>updateSystem('circuit')); });
+        document.getElementById('timebaseSlider').addEventListener('input', e=>{ state.timebaseIdx=parseInt(e.target.value); document.getElementById('timebaseDisplay').textContent=formatTime(TIMEBASES[state.timebaseIdx]); if(document.getElementById('autosetCheck').checked)document.getElementById('autosetCheck').checked=false; drawOscillo(); });
+        document.getElementById('voltDiv').addEventListener('change', e=>{state.voltDiv=parseFloat(e.target.value);drawOscillo();});
+        document.getElementById('showUe').addEventListener('change', drawOscillo);
+        document.getElementById('showUs').addEventListener('change', drawOscillo);
+        document.getElementById('autosetCheck').addEventListener('change', ()=>updateSystem('force'));
+        document.getElementById('showAsymp').addEventListener('change', ()=>updateSystem('bodeOpt'));
+        document.getElementById('showBandwidth').addEventListener('change', ()=>updateSystem('bodeOpt'));
+        document.getElementById('showCursors').addEventListener('change', e=>{ document.getElementById('measurePanel').style.display=e.target.checked?'flex':'none'; if(e.target.checked){ cursors.t1=-TIMEBASES[state.timebaseIdx]*2; cursors.t2=TIMEBASES[state.timebaseIdx]*2; } drawOscillo(); });
+        document.getElementById('bodeDisplayMode').addEventListener('change', e=>{ const m = e.target.value; const cG=document.getElementById('containerGain'), cP=document.getElementById('containerPhase'), opts=document.getElementById('bodeOptionsContainer'); if(m==='both'){cG.classList.remove('hidden');cP.classList.remove('hidden');opts.classList.remove('visible');} else if(m==='gain'){cG.classList.remove('hidden');cP.classList.add('hidden');opts.classList.add('visible');} else{cG.classList.add('hidden');cP.classList.remove('hidden');opts.classList.remove('visible');} setTimeout(()=>{chartGain.resize();chartPhase.resize();updateBodeCurves();},50); });
+        
+        document.getElementById('toggleViewBtn').addEventListener('click', () => { state.view = state.view === 'circuit' ? 'fresnel' : 'circuit'; document.getElementById('toggleViewBtn').textContent = state.view === 'circuit' ? "Vue: Schéma" : "Vue: Fresnel"; drawCircuit(); });
+        window.addEventListener('resize', ()=>{drawCircuit();drawOscillo();chartGain.resize();chartPhase.resize();});
+        
+        const s = document.getElementById('timebaseSlider'); let idx=0; TIMEBASES.forEach((v,i)=>{if(v>=0.002&&v<0.003)idx=i;});
+        state.timebaseIdx=idx; s.value=idx; document.getElementById('timebaseDisplay').textContent=formatTime(TIMEBASES[idx]);
+        initBodeCharts(); updateSystem('init');
+    </script>
+</body>
+</html>

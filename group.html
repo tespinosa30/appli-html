@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur de groupes d'élèves</title>
+
+    <!-- jsPDF + AutoTable -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --danger: #e74c3c;
+            --blue-warn: #2980b9;
+            --green-force: #27ae60;
+        }
+
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 {
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 950px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background: #fafafa;
+        }
+
+        .panel h3 {
+            margin-top: 0;
+            font-size: 1rem;
+            color: var(--secondary);
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+
+        .btn-import { background-color: var(--secondary); }
+        .btn-add { background-color: var(--accent); }
+        .btn-go {
+            background-color: #27ae60;
+            font-size: 1.1rem;
+            padding: 12px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .btn-go:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary { background-color: #95a5a6; font-size: 0.9rem; }
+        .btn-tertiary { background-color: #34495e; font-size: 0.9rem; }
+
+        input[type="text"],
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        input[type="number"] {
+            width: 60px;
+            text-align: center;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            cursor: pointer;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .input-group label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            min-width: 150px;
+        }
+
+        .val-display {
+            font-weight: bold;
+            color: var(--accent);
+            width: 80px;
+            text-align: right;
+        }
+
+        .info-note {
+            font-size: 0.8rem;
+            color: #666;
+            font-style: italic;
+            margin-left: 160px;
+            margin-top: -5px;
+            margin-bottom: 10px;
+        }
+
+        #student-list {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background: white;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 5px;
+            padding: 5px;
+        }
+
+        #student-list li {
+            padding: 5px 8px;
+            border: 1px solid #eee;
+            background: #f9f9f9;
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        #student-list li:hover {
+            background-color: #eef;
+        }
+
+        .check-group {
+            display: flex;
+            gap: 10px;
+            margin-right: 10px;
+            border-right: 1px solid #ddd;
+            padding-right: 10px;
+        }
+
+        .cb-base {
+            transform: scale(1.3);
+            cursor: pointer;
+        }
+        .cb-green { accent-color: var(--green-force); }
+        .cb-red { accent-color: var(--danger); }
+        .cb-blue { accent-color: var(--blue-warn); }
+
+        .student-name {
+            flex: 1;
+            cursor: default;
+            font-weight: 500;
+        }
+
+        .tag {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 3px;
+        }
+        .tag-red { background-color: var(--danger); }
+        .tag-blue { background-color: var(--blue-warn); }
+        .tag-green { background-color: var(--green-force); }
+
+        .btn-del {
+            color: #aaa;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0 5px;
+            font-size: 1.1em;
+            margin-left: 5px;
+        }
+        .btn-del:hover { color: var(--danger); }
+
+        #status-bar {
+            margin-top: 10px;
+            font-weight: bold;
+            text-align: center;
+            color: var(--accent);
+            min-height: 20px;
+            font-size: 0.9rem;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 15px;
+            display: none;
+            margin-top: 5px;
+        }
+
+        #preview-panel {
+            display: none;
+            border-top: 2px solid #ddd;
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+
+        #preview-table {
+            width: 100%;
+            font-size: 0.8rem;
+            border-collapse: collapse;
+        }
+        #preview-table th,
+        #preview-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        #preview-table th {
+            background-color: #2980b9;
+            color: white;
+        }
+        #preview-table tr:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+        
+        footer {
+            margin-top: 20px;
+            font-size: 0.75rem;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Générateur de groupes d'élèves</h1>
+
+    <div class="container">
+        <!-- 1. Importation -->
+        <div class="panel">
+            <h3>1. Importation</h3>
+            <div class="btn-group">
+                <button class="btn-import" onclick="importFromClipboard('excel')">📋 Coller Excel</button>
+                <button class="btn-import" onclick="importFromClipboard('pronote')">📋 Coller Pronote</button>
+                <button class="btn-secondary" onclick="exportConfig()">💾 Exporter la Classe</button>
+                <button class="btn-secondary" onclick="document.getElementById('configFile').click()">📂 Importer une Classe</button>
+                <input type="file" id="configFile" accept=".json" onchange="importConfig(this)">
+            </div>
+        </div>
+
+        <!-- 2. Liste des élèves -->
+        <div class="panel">
+            <h3>2. Liste des Élèves (<span id="count">0</span>)</h3>
+            <p style="font-size:0.85rem;color:#666;margin-top:0;display:flex;gap:15px;flex-wrap:wrap;">
+                <span style="color:var(--green-force);">🟩 Doivent être ensemble (Imposés)</span>
+                <span style="color:var(--danger);">🟥 Incompatibles Grp A (au plus 1 rouge par paillasse)</span>
+                <span style="color:var(--blue-warn);">🟦 Incompatibles Grp B (au plus 1 bleu par paillasse)</span>
+            </p>
+            <div class="input-group">
+                <input type="text" id="new-student" placeholder="Ajouter un nom..." style="flex:1;">
+                <button class="btn-add" onclick="addStudent()">Ajouter</button>
+            </div>
+            <ul id="student-list"></ul>
+        </div>
+
+        <!-- 3. Paramètres & Génération -->
+        <div class="panel">
+            <h3>3. Paramètres & Génération</h3>
+            <div class="input-group">
+                <label>Nombre de paillasses :</label>
+                <input type="number" id="nb-paillasses" value="8" min="1" max="20">
+            </div>
+            <div class="input-group">
+                <label>Nombre de semaines :</label>
+                <input type="number" id="nb-semaines" value="10" min="1" max="52">
+            </div>
+            <div class="input-group">
+                <label>Précision (Essais) :</label>
+                <input type="range" id="max-attempts" min="1000" max="100000" step="1000" value="10000" oninput="updateAttemptsDisplay(this.value)">
+                <span id="attempts-val" class="val-display">10 000</span>
+            </div>
+            <div class="info-note">
+                Si le programme ne trouve plus de combinaison valide après ce nombre d'essais, il s'arrêtera.
+            </div>
+
+            <div class="input-group">
+                <label>Titre du PDF :</label>
+                <input type="text" id="pdf-title" value="Groupes de TP" style="flex:1;" placeholder="Ex : Groupes de TP - Semestre 1">
+            </div>
+            <div class="input-group">
+                <label>Nom du fichier PDF :</label>
+                <input type="text" id="filename" value="GroupesTP" style="flex:1;">
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-go" onclick="startGeneration()">🚀 GO - Générer</button>
+                <button class="btn-tertiary" id="btn-pdf" onclick="downloadPDF()" style="display:none;">📄 Télécharger PDF</button>
+            </div>
+
+            <div id="status-bar">Prêt</div>
+            <progress id="progress-bar" max="100" value="0"></progress>
+        </div>
+
+        <!-- 4. Prévisualisation -->
+        <div class="panel" id="preview-panel">
+            <h3>Prévisualisation</h3>
+            <div style="max-height:500px;overflow:auto;">
+                <table id="preview-table"></table>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        Espinosa T. Lycée Albert Einstein
+    </footer>
+
+    <script>
+        let students = [];
+        let lastResultats = null;
+
+        const listEl        = document.getElementById('student-list');
+        const countEl       = document.getElementById('count');
+        const statusEl      = document.getElementById('status-bar');
+        const progressEl    = document.getElementById('progress-bar');
+        const nbPaillassesEl= document.getElementById('nb-paillasses');
+        const nbSemainesEl  = document.getElementById('nb-semaines');
+        const maxAttemptsEl = document.getElementById('max-attempts');
+        const pdfTitleEl    = document.getElementById('pdf-title');
+        const previewPanel  = document.getElementById('preview-panel');
+        const previewTable  = document.getElementById('preview-table');
+        const btnPdf        = document.getElementById('btn-pdf');
+
+        function renderNameHTML(student) {
+            let html = student.name;
+            if (student.green) html += '<span class="tag tag-green"></span>';
+            if (student.red)   html += '<span class="tag tag-red"></span>';
+            if (student.blue)  html += '<span class="tag tag-blue"></span>';
+            return html;
+        }
+
+        function updateTags(index) {
+            document.getElementById('name-' + index).innerHTML = renderNameHTML(students[index]);
+        }
+
+        function updateList() {
+            listEl.innerHTML = '';
+            students.forEach((student, index) => {
+                const li = document.createElement('li');
+
+                const checkGroup = document.createElement('div');
+                checkGroup.className = 'check-group';
+
+                const cbGreen = document.createElement('input');
+                cbGreen.type = 'checkbox';
+                cbGreen.className = 'cb-base cb-green';
+                cbGreen.title = 'Imposer la paire (vert) – ces élèves seront toujours ensemble';
+                cbGreen.checked = student.green;
+                cbGreen.onclick = () => {
+                    student.green = cbGreen.checked;
+                    updateTags(index);
+                };
+
+                const cbRed = document.createElement('input');
+                cbRed.type = 'checkbox';
+                cbRed.className = 'cb-base cb-red';
+                cbRed.title = 'Incompatible groupe A (au plus 1 rouge par paillasse)';
+                cbRed.checked = student.red;
+                cbRed.onclick = () => {
+                    student.red = cbRed.checked;
+                    updateTags(index);
+                };
+
+                const cbBlue = document.createElement('input');
+                cbBlue.type = 'checkbox';
+                cbBlue.className = 'cb-base cb-blue';
+                cbBlue.title = 'Incompatible groupe B (au plus 1 bleu par paillasse)';
+                cbBlue.checked = student.blue;
+                cbBlue.onclick = () => {
+                    student.blue = cbBlue.checked;
+                    updateTags(index);
+                };
+
+                checkGroup.appendChild(cbGreen);
+                checkGroup.appendChild(cbRed);
+                checkGroup.appendChild(cbBlue);
+
+                const nameContainer = document.createElement('div');
+                nameContainer.className = 'student-name';
+                nameContainer.id = 'name-' + index;
+                nameContainer.innerHTML = renderNameHTML(student);
+
+                const delBtn = document.createElement('span');
+                delBtn.className = 'btn-del';
+                delBtn.innerHTML = '&times;';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeStudent(index);
+                };
+
+                li.appendChild(checkGroup);
+                li.appendChild(nameContainer);
+                li.appendChild(delBtn);
+                listEl.appendChild(li);
+            });
+
+            countEl.textContent = students.length;
+        }
+
+        function addStudent() {
+            const input = document.getElementById('new-student');
+            const name = input.value.trim();
+            if (!name) return;
+            students.push({ name, red: false, blue: false, green: false });
+            input.value = '';
+            updateList();
+        }
+
+        function removeStudent(index) {
+            students.splice(index, 1);
+            updateList();
+        }
+
+        function exportConfig() {
+            const config = {
+                students,
+                nbPaillasses: document.getElementById('nb-paillasses').value,
+                nbSemaines: document.getElementById('nb-semaines').value,
+                maxAttempts: document.getElementById('max-attempts').value,
+                filename: document.getElementById('filename').value,
+                pdfTitle: document.getElementById('pdf-title').value
+            };
+
+            const blob = new Blob([JSON.stringify(config, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'config_classe.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importConfig(fileInput) {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    const importedStudents = config.students || [];
+                    students = importedStudents.map(s => ({
+                        name: s.name,
+                        red: !!s.red,
+                        blue: !!s.blue,
+                        green: !!s.green
+                    }));
+
+                    document.getElementById('nb-paillasses').value = config.nbPaillasses || 8;
+                    document.getElementById('nb-semaines').value   = config.nbSemaines   || 10;
+                    document.getElementById('max-attempts').value  = config.maxAttempts || 10000;
+                    document.getElementById('filename').value      = config.filename    || 'GroupesTP';
+                    document.getElementById('pdf-title').value     = config.pdfTitle    || 'Groupes de TP';
+
+                    updateAttemptsDisplay(config.maxAttempts || 10000);
+                    updateList();
+                    statusEl.textContent = `Configuration chargée (${students.length} élèves).`;
+                } catch (err) {
+                    alert('Erreur lors du chargement de la configuration : ' + err);
+                }
+            };
+            reader.readAsText(file);
+            fileInput.value = '';
+        }
+
+        function updateAttemptsDisplay(val) {
+            document.getElementById('attempts-val').textContent = parseInt(val).toLocaleString('fr-FR');
+        }
+
+        // ----------- LECTURE PRESSE-PAPIER ROBUSTE ------------------
+
+        async function lirePressePapier() {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) return text;
+                } catch (err) {
+                    console.warn("Lecture auto du presse-papier bloquée, fallback manuel.", err);
+                }
+            }
+
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                Object.assign(overlay.style, {
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 99999,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    backdropFilter: 'blur(2px)'
+                });
+
+                const box = document.createElement('div');
+                Object.assign(box.style, {
+                    backgroundColor: 'white', padding: '20px', borderRadius: '10px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.2)', width: '450px',
+                    textAlign: 'center', fontFamily: 'Segoe UI, sans-serif'
+                });
+
+                const title = document.createElement('h3');
+                title.textContent = "📋 Collage manuel requis";
+                title.style.margin = "0 0 10px 0";
+                title.style.color = "#2c3e50";
+
+                const msg = document.createElement('p');
+                msg.textContent = "Le navigateur bloque l'accès automatique au presse-papier sur ce site. Collez vos données (Ctrl+V) ci-dessous puis cliquez sur Valider.";
+                msg.style.fontSize = "0.85em";
+                msg.style.color = "#666";
+
+                const textarea = document.createElement('textarea');
+                Object.assign(textarea.style, {
+                    width: '100%', height: '150px', margin: '10px 0', padding: '10px',
+                    border: '2px solid #ddd', borderRadius: '6px', fontSize: '12px',
+                    boxSizing: 'border-box', resize: 'vertical'
+                });
+                textarea.placeholder = "Collez ici les données copiées depuis Excel ou Pronote...";
+
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = "flex";
+                btnContainer.style.gap = "10px";
+                btnContainer.style.justifyContent = "center";
+                btnContainer.style.marginTop = "10px";
+
+                const btnCancel = document.createElement('button');
+                btnCancel.textContent = "Annuler";
+                Object.assign(btnCancel.style, {
+                    padding: '8px 20px', backgroundColor: '#95a5a6', color: 'white',
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600'
+                });
+
+                const btnOk = document.createElement('button');
+                btnOk.textContent = "Valider les données";
+                Object.assign(btnOk.style, {
+                    padding: '8px 20px', backgroundColor: '#3498db', color: 'white',
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600'
+                });
+
+                const close = (val) => {
+                    document.body.removeChild(overlay);
+                    resolve(val);
+                };
+
+                btnOk.onclick = () => close(textarea.value);
+                btnCancel.onclick = () => close(null);
+                overlay.onclick = (e) => { if (e.target === overlay) close(null); };
+
+                btnContainer.appendChild(btnCancel);
+                btnContainer.appendChild(btnOk);
+                box.appendChild(title);
+                box.appendChild(msg);
+                box.appendChild(textarea);
+                box.appendChild(btnContainer);
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+                textarea.focus();
+            });
+        }
+
+        // ----------- IMPORT DEPUIS PRESSE-PAPIER (CORRIGÉ) ---------------------
+
+        async function importFromClipboard(mode) {
+            try {
+                const text = await lirePressePapier();
+                if (!text) return;
+
+                const rawNames = [];
+
+                if (mode === 'pronote') {
+                    const lines = text.split(/\r?\n/);
+                    lines.forEach(line => {
+                        let clean = line.replace(/;/g, ' ').trim();
+                        clean = clean.replace(/^"|"$/g, '');
+                        if (!clean) return;
+
+                        const lower = clean.toLowerCase();
+                        if (lower === 'nom' || lower === 'eleve' || lower === 'élève' || lower === 'classe') return;
+
+                        rawNames.push(clean);
+                    });
+                } else {
+                    const lines = text.split(/\r?\n/);
+                    lines.forEach(line => {
+                        const cols = line.split('\t');
+                        let val = (cols[0] || '').trim();
+                        val = val.replace(/^"|"$/g, '');
+                        if (!val) return;
+                        if (val.toLowerCase() === 'nom') return;
+
+                        rawNames.push(val);
+                    });
+                }
+
+                let addedCount = 0;
+                rawNames.forEach(n => {
+                    if (!n) return;
+                    if (!students.some(s => s.name.toLowerCase() === n.toLowerCase())) {
+                        students.push({ name: n, red: false, blue: false, green: false });
+                        addedCount++;
+                    }
+                });
+
+                updateList();
+                statusEl.textContent = `${addedCount} élèves ajoutés (Total: ${students.length}).`;
+            } catch (e) {
+                alert('Erreur lors de la lecture du presse-papier : ' + e);
+            }
+        }
+
+        // ----------- ALGORITHME DE GÉNÉRATION -----------------------
+
+        function areTuplesEqual(t1, t2) {
+            if (t1.length !== t2.length) return false;
+            const s1 = [...t1].sort();
+            const s2 = [...t2].sort();
+            return s1.every((val, i) => val === s2[i]);
+        }
+
+        function extractPairs(semaineGroups) {
+            const pairs = [];
+            for (let group of semaineGroups) {
+                if (group.length >= 2) {
+                    for (let i = 0; i < group.length; i++) {
+                        for (let j = i + 1; j < group.length; j++) {
+                            pairs.push([group[i], group[j]]);
+                        }
+                    }
+                }
+            }
+            return pairs;
+        }
+
+        function verifHistorique(historique, semaineCandidate, fixedPairs) {
+            const pairsCandidate = extractPairs(semaineCandidate);
+            const pairsToCheck = pairsCandidate.filter(p =>
+                !fixedPairs.some(fp => areTuplesEqual(p, fp))
+            );
+
+            if (pairsToCheck.length === 0) return true;
+
+            for (let semainePassee of historique) {
+                const pairsPassee = extractPairs(semainePassee);
+                for (let pC of pairsToCheck) {
+                    for (let pP of pairsPassee) {
+                        if (areTuplesEqual(pC, pP)) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function isGroupValid(groupIndices) {
+            let redCount = 0;
+            let blueCount = 0;
+            for (let idx of groupIndices) {
+                if (students[idx].red) redCount++;
+                if (students[idx].blue) blueCount++;
+            }
+            if (redCount > 1)  return false;
+            if (blueCount > 1) return false;
+            return true;
+        }
+
+        async function generateGroups(nbEleves, targetSemaines) {
+            let nbPaillasseTarget = parseInt(nbPaillassesEl.value) || 8;
+            let nbPaillasse = Math.min(nbPaillasseTarget, nbEleves);
+            let maxAttempts = parseInt(maxAttemptsEl.value) || 10000;
+
+            let greenIndices = [];
+            let freeIndices  = [];
+            students.forEach((s, i) => {
+                if (s.green) greenIndices.push(i);
+                else freeIndices.push(i);
+            });
+
+            if (greenIndices.length % 2 !== 0) {
+                alert("Nombre impair d'élèves verts. Il faut des paires complètes.");
+                return null;
+            }
+
+            let fixedPairs = [];
+            for (let i = 0; i < greenIndices.length; i += 2) {
+                fixedPairs.push([greenIndices[i], greenIndices[i+1]]);
+            }
+
+            let historique = [];
+            progressEl.style.display = 'block';
+            progressEl.value = 0;
+
+            for (let semaine = 0; semaine < targetSemaines; semaine++) {
+                statusEl.textContent = `Semaine ${semaine+1}/${targetSemaines}...`;
+                await new Promise(r => setTimeout(r, 5));
+
+                let found = false;
+                let attempts = 0;
+
+                while (!found && attempts < maxAttempts) {
+                    attempts++;
+                    if (attempts % 500 === 0) {
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+
+                    let binome = [];
+                    for (let k = 0; k < nbPaillasse; k++) binome.push([]);
+
+                    let availableGroups = Array.from({length: nbPaillasse}, (_, i) => i);
+                    for (let i = availableGroups.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [availableGroups[i], availableGroups[j]] = [availableGroups[j], availableGroups[i]];
+                    }
+
+                    let placementReussi = true;
+                    let currentGroupIdx = 0;
+                    for (let pair of fixedPairs) {
+                        if (currentGroupIdx >= nbPaillasse) {
+                            placementReussi = false;
+                            break;
+                        }
+                        let gIdx = availableGroups[currentGroupIdx];
+                        binome[gIdx].push(pair[0], pair[1]);
+                        currentGroupIdx++;
+                    }
+                    if (!placementReussi) continue;
+
+                    let lst = [...freeIndices];
+                    for (let i = lst.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [lst[i], lst[j]] = [lst[j], lst[i]];
+                    }
+
+                    for (let studentIdx of lst) {
+                        let groupIndices = Array.from({length: nbPaillasse}, (_, i) => i);
+                        for (let i = groupIndices.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [groupIndices[i], groupIndices[j]] = [groupIndices[j], groupIndices[i]];
+                        }
+
+                        groupIndices.sort((a,b) => binome[a].length - binome[b].length);
+                        let placed = false;
+                        for (let gIdx of groupIndices) {
+                            let testGroup = [...binome[gIdx], studentIdx];
+                            if (isGroupValid(testGroup)) {
+                                binome[gIdx].push(studentIdx);
+                                placed = true;
+                                break;
+                            }
+                        }
+                        if (!placed) {
+                            placementReussi = false;
+                            break;
+                        }
+                    }
+
+                    if (!placementReussi) continue;
+                    if (!verifHistorique(historique, binome, fixedPairs)) continue;
+
+                    historique.push(binome);
+                    progressEl.value = ((semaine + 1) / targetSemaines) * 100;
+                    found = true;
+                }
+
+                if (!found) {
+                    statusEl.textContent = `Arrêt à la semaine ${semaine+1} (saturation).`;
+                    statusEl.style.color = 'orange';
+                    await new Promise(r => setTimeout(r, 1500));
+                    break;
+                }
+            }
+
+            return historique;
+        }
+
+        async function startGeneration() {
+            if (students.length < 2) {
+                alert("Il faut au moins 2 élèves.");
+                return;
+            }
+
+            const btn = document.querySelector('.btn-go');
+            btn.disabled = true;
+            btnPdf.style.display = 'none';
+            statusEl.style.color = 'var(--accent)';
+            previewPanel.style.display = 'none';
+            progressEl.value = 0;
+
+            let nbSemaines = parseInt(nbSemainesEl.value) || 10;
+
+            const resultats = await generateGroups(students.length, nbSemaines);
+            if (resultats && resultats.length > 0) {
+                lastResultats = resultats;
+                displayPreview(resultats);
+                btnPdf.style.display = 'inline-block';
+                if (statusEl.style.color !== 'orange') {
+                    statusEl.textContent = `Terminé ! ${resultats.length} semaines générées.`;
+                }
+            } else {
+                statusEl.textContent = "Échec. Vérifiez vos contraintes.";
+            }
+
+            btn.disabled = false;
+        }
+
+        function displayPreview(resultats) {
+            const nbPaillasses = parseInt(nbPaillassesEl.value) || 8;
+
+            let headerHTML = '<tr><th>Semaine</th>';
+            for (let i = 1; i <= nbPaillasses; i++) {
+                headerHTML += `<th>Gr. ${i}</th>`;
+            }
+            headerHTML += '</tr>';
+
+            let bodyHTML = '';
+
+            resultats.forEach((semaineGroups, idx) => {
+                bodyHTML += `<tr><td><strong>Sem. ${idx+1}</strong></td>`;
+                semaineGroups.forEach(grp => {
+                    const names = grp.map(i => {
+                        const s = students[i];
+                        let style = '';
+                        if (s.green) style += 'color:#27ae60;font-weight:bold;';
+                        if (s.red)   style += 'color:#e74c3c;';
+                        if (s.blue)  style += 'color:#2980b9;';
+                        return `<span style="${style}">${s.name}</span>`;
+                    }).join('<br>');
+                    bodyHTML += `<td>${names || '---'}</td>`;
+                });
+                for (let i = semaineGroups.length; i < nbPaillasses; i++) {
+                    bodyHTML += '<td>---</td>';
+                }
+                bodyHTML += '</tr>';
+            });
+
+            previewTable.innerHTML = headerHTML + bodyHTML;
+            previewPanel.style.display = 'block';
+        }
+
+        function downloadPDF() {
+            if (!lastResultats) {
+                alert("Aucune génération en cours !");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+
+            const nbPaillasses = parseInt(nbPaillassesEl.value) || 8;
+            const customTitle = pdfTitleEl.value.trim() || 'Groupes de TP';
+
+            const headers = ['Semaine'];
+            for (let i = 1; i <= nbPaillasses; i++) {
+                headers.push('Gr. ' + i);
+            }
+
+            const tableBody = [];
+            lastResultats.forEach((semaineGroups, idx) => {
+                let row = ['Sem. ' + (idx + 1)];
+                semaineGroups.forEach(grp => {
+                    row.push(grp.map(i => students[i].name).join('\n'));
+                });
+                while (row.length < nbPaillasses + 1) {
+                    row.push('---');
+                }
+                tableBody.push(row);
+            });
+
+            doc.setFontSize(14);
+            doc.text(customTitle, 14, 15);
+
+            doc.autoTable({
+                head: [headers],
+                body: tableBody,
+                startY: 25,
+                theme: 'grid',
+                styles: { fontSize: 7, valign: 'middle', halign: 'center', cellPadding: 2 },
+                headStyles: { fillColor: [41, 128, 185] },
+                columnStyles: {
+                    0: { fontStyle: 'bold', fillColor: [240,240,240], cellWidth: 15 }
+                },
+                margin: { left: 10, right: 10 }
+            });
+
+            const baseName = (document.getElementById('filename').value || 'GroupesTP').trim();
+            doc.save(baseName + '.pdf');
+        }
+
+        // Init
+        updateAttemptsDisplay(maxAttemptsEl.value);
+    </script>
+</body>
+</html>

@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Équilibrage Chimie</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --error: #c0392b;
+            --bg: #ecf0f1;
+            --card: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        .container {
+            background-color: var(--card);
+            width: 100%;
+            max-width: 950px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 550px;
+            flex: 1;
+            position: relative;
+        }
+
+        /* HEADER */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            position: relative;
+            min-height: 60px;
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+        
+        .home-btn {
+            position: absolute; top: 20px; left: 20px;
+            background: none; border: 1px solid rgba(255,255,255,0.3);
+            color: white; cursor: pointer; padding: 5px 10px; border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .home-btn:hover { background: rgba(255,255,255,0.1); }
+        
+        /* ID GEANT */
+        .giant-id {
+            position: absolute; top: 10px; right: 20px;
+            background: #f39c12; color: #fff;
+            padding: 5px 10px; border-radius: 8px;
+            font-weight: bold; font-size: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            border: 2px solid white;
+            z-index: 100;
+        }
+
+        .score-badge {
+            background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; 
+            font-weight: bold; font-size: 1rem; display: inline-block; margin-top: 5px;
+        }
+
+        /* SECTIONS */
+        .section { display: none; padding: 30px 10px; flex: 1; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; }
+        .active-section { display: flex; }
+
+        /* MENU */
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; width: 100%; max-width: 800px; }
+        .menu-card {
+            background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 8px;
+            padding: 25px; text-align: center; cursor: pointer; transition: all 0.2s;
+        }
+        .menu-card:hover { transform: translateY(-5px); border-color: var(--secondary); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .menu-icon { font-size: 2.5rem; margin-bottom: 10px; display: block; }
+        .menu-title { font-weight: bold; font-size: 1.1rem; color: var(--primary); }
+        .menu-desc { font-size: 0.85rem; color: #7f8c8d; margin-top: 5px; }
+
+        /* CONFIG MODAL */
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8); z-index: 200;
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-content { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; text-align: center; }
+        .mode-option { margin: 10px 0; padding: 10px; border: 2px solid #eee; border-radius: 8px; cursor: pointer; text-align: left; }
+        .mode-option:hover { border-color: var(--secondary); background: #f9f9f9; }
+        .mode-option.selected { border-color: var(--success); background: #eafaf1; }
+        .mode-title { font-weight: bold; display: block; margin-bottom: 5px; }
+        .mode-desc { font-size: 0.8rem; color: #666; }
+
+        /* GAME UI */
+        .progress-container { height: 6px; background-color: #bdc3c7; width: 100%; }
+        .progress-bar { height: 100%; background-color: var(--success); width: 0%; transition: width 0.3s; }
+
+        .equation-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .equation-container { 
+            display: flex; 
+            flex-wrap: nowrap; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 5px; 
+            white-space: nowrap;
+            font-size: 1.4rem;
+            transition: font-size 0.3s;
+        }
+        
+        @media (max-width: 768px) {
+            .equation-container { font-size: 1rem; }
+            input[type="number"] { width: 40px; height: 35px; font-size: 1rem; }
+        }
+
+        .molecule-group { display: flex; align-items: center; }
+        
+        input[type="number"] {
+            width: 45px; height: 40px; text-align: center; font-size: 1.1rem; margin-right: 3px; 
+            border: 2px solid #bdc3c7; border-radius: 6px; -moz-appearance: textfield;
+            transition: all 0.2s;
+        }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input:focus { border-color: var(--secondary); outline: none; transform: scale(1.05); }
+        
+        .molecule { font-weight: bold; margin-right: 2px; }
+        .operator { margin: 0 8px; color: #7f8c8d; font-weight: bold; }
+        sup { color: var(--secondary); font-size: 0.7em; vertical-align: super; }
+        sub { color: var(--primary); font-size: 0.7em; vertical-align: sub; }
+
+        .feedback-area { min-height: 50px; text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 1.1rem; }
+        .btn { padding: 10px 25px; font-size: 1rem; border: none; border-radius: 6px; cursor: pointer; transition: transform 0.1s; color: white; font-weight: bold; margin: 5px;}
+        .btn:active { transform: scale(0.98); }
+        .btn-validate { background-color: var(--secondary); }
+        .btn-next { background-color: var(--success); display: none; }
+        
+        .correct-input { border-color: var(--success) !important; background-color: #eafaf1; color: var(--success); }
+        .wrong-input { border-color: var(--error) !important; background-color: #fdedec; }
+        .solution-input { border-color: var(--warning) !important; background-color: #fef9e7; color: var(--warning); }
+        .hint-input { border-color: var(--success) !important; background-color: #eafaf1 !important; color: var(--success) !important; font-weight: bold; }
+
+        .msg-success { color: var(--success); } .msg-error { color: var(--error); } .msg-solution { color: var(--warning); }
+
+        /* TOOL UI */
+        textarea { width: 100%; height: 150px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; margin-bottom: 20px; resize: vertical; }
+        .tool-instructions { background: #e8f6f3; padding: 10px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 20px; border-left: 4px solid var(--success); width: 100%; box-sizing: border-box; }
+        .file-drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 8px; cursor: pointer; margin-bottom: 20px; width: 80%; }
+        .file-drop-zone:hover { border-color: var(--secondary); background: #f0f8ff; }
+
+        footer { margin-top: 15px; color: #95a5a6; font-size: 0.8rem; text-align: right; width: 100%; max-width: 900px; padding-bottom: 10px; padding-right: 10px;}
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <!-- Bouton Menu conservé -->
+        <button class="home-btn" onclick="confirmExit()">🏠 Menu</button>
+        
+        <div style="display:flex; flex-direction:column;">
+            <div style="font-size: 1.4rem; font-weight: bold;">⚗️ Test : Équilibrage d'Équations</div>
+            <div id="score-container" style="display:none;">
+                <div class="score-badge" id="score-badge">Note : <span id="score">0</span> / <span id="max-score">0</span></div>
+            </div>
+        </div>
+
+        <div id="session-id-container" class="giant-id" style="display:none;">#<span id="session-id">000</span></div>
+    </header>
+    
+    <div id="progress-container" class="progress-container" style="display:none;">
+        <div class="progress-bar" id="progress"></div>
+    </div>
+
+    <!-- MENU -->
+    <div id="menu-section" class="section active-section">
+        <h2 style="margin-bottom:30px;">Choisissez un mode</h2>
+        <div class="menu-grid">
+            <div class="menu-card" onclick="prepareConfig('default')">
+                <span class="menu-icon">🎓</span>
+                <div class="menu-title">Test Standard</div>
+                <div class="menu-desc">20 équations de difficulté croissante.</div>
+            </div>
+            <div class="menu-card" onclick="showFileLoad()">
+                <span class="menu-icon">📂</span>
+                <div class="menu-title">Charger un Test</div>
+                <div class="menu-desc">Importer un fichier texte.</div>
+            </div>
+            <div class="menu-card" onclick="showEncryptTool()">
+                <span class="menu-icon">⚙️</span>
+                <div class="menu-title">Outil Professeur</div>
+                <div class="menu-desc">Créer et chiffrer vos fichiers.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIGURATION -->
+    <div id="config-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Configuration</h3>
+            
+            <div class="mode-option selected" onclick="selectMode('eval')" id="opt-eval">
+                <span class="mode-title">📝 Mode Évalué</span>
+                <span class="mode-desc">Score, Note /20 et ID visible.</span>
+            </div>
+            
+            <div class="mode-option" onclick="selectMode('training')" id="opt-training">
+                <span class="mode-title">🏋️ Mode Entraînement</span>
+                <span class="mode-desc">Sans note. Aide automatique après erreur.</span>
+            </div>
+
+            <div style="text-align:left; margin:15px 0; display:flex; flex-direction:column; gap:10px;">
+                <label style="cursor:pointer; display:flex; align-items:center;">
+                    <input type="checkbox" id="shuffle-check" style="width:20px; height:20px; margin-right:10px;">
+                    <strong>Mélanger les questions</strong>
+                </label>
+                
+                <label style="cursor:pointer; display:flex; align-items:center;">
+                    <input type="checkbox" id="color-check" style="width:20px; height:20px; margin-right:10px;">
+                    <strong>Colorer les erreurs en rouge</strong>
+                </label>
+            </div>
+
+            <button class="btn btn-validate" onclick="launchSession()" style="width:100%;">Lancer</button>
+            <button class="btn" onclick="closeModal()" style="margin-top:10px; background:#95a5a6; width:100%;">Annuler</button>
+        </div>
+    </div>
+
+    <!-- GAME -->
+    <div id="game-section" class="section">
+        <div style="margin-bottom: 10px; color: #7f8c8d; font-size: 0.9rem;">
+            Question <span id="q-num">1</span>
+            <span id="attempts-container"> — Essais : <span id="attempts" style="font-weight:bold;">3</span></span>
+        </div>
+        
+        <div class="equation-wrapper">
+            <div class="equation-container" id="equation-box"></div>
+        </div>
+
+        <div class="feedback-area" id="feedback"></div>
+        <div>
+            <button class="btn btn-validate" id="btn-check" onclick="checkAnswer()">Valider</button>
+            <button class="btn btn-next" id="btn-next" onclick="nextQuestion()">Suivant ➜</button>
+        </div>
+    </div>
+
+    <!-- END -->
+    <div id="end-section" class="section">
+        <h2>Terminé !</h2>
+        
+        <div id="end-id-box" style="background:#fef9e7; padding:10px; border:1px solid #f39c12; border-radius:8px; margin-bottom:20px; display:none;">
+            <strong>ID Session : #<span id="final-id">000</span></strong>
+        </div>
+
+        <div id="end-score-box">
+            <p style="font-size:1.1rem; margin-bottom:5px;">Score Brut :</p>
+            <div style="font-size: 1.5rem; color: #7f8c8d; margin-bottom: 20px;">
+                <span id="final-score-val">0</span> / <span id="final-max-val">0</span>
+            </div>
+
+            <p style="font-size:1.2rem; font-weight:bold; margin-bottom:5px;">Note Finale :</p>
+            <div style="font-size: 3.5rem; color: var(--primary); margin-bottom: 20px;">
+                <span id="final-mark-val">0</span> <span style="font-size:1.5rem; color:#95a5a6;">/ 20</span>
+            </div>
+        </div>
+
+        <div id="final-comment" style="color:#555; font-style:italic; margin-bottom:20px;"></div>
+        <button class="btn btn-validate" onclick="clearStorageAndMenu()">Retour au Menu</button>
+    </div>
+
+    <!-- FILE LOAD -->
+    <div id="load-section" class="section">
+        <h2>Charger un Fichier Test</h2>
+        <div class="file-drop-zone" onclick="document.getElementById('file-input').click()">
+            <p>Cliquez ici pour sélectionner un fichier .txt</p>
+        </div>
+        <input type="file" id="file-input" accept=".txt" style="display:none" onchange="handleFileSelect(this)">
+        <div id="load-error" style="color:var(--error); font-weight:bold;"></div>
+    </div>
+
+    <!-- TOOL -->
+    <div id="encrypt-section" class="section">
+        <h2>Créateur de Test Sécurisé</h2>
+        <div class="tool-instructions">
+            <strong>Format :</strong> Une équation par ligne. <code>=</code> pour la flèche. Charges entre <code>[]</code>.<br>
+            Exemple : <code>Cu[2+] + 2HO[-] = Cu(OH)2</code>
+        </div>
+        <textarea id="input-equations" placeholder="Collez vos équations ici..."></textarea>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-validate" onclick="generateAndDownload(true)">🔒 Télécharger (Chiffré)</button>
+            <button class="btn" style="background:#95a5a6;" onclick="generateAndDownload(false)">📄 Télécharger (Texte)</button>
+        </div>
+    </div>
+</div>
+
+<footer>Espinosa T. Lycée Albert Einstein</footer>
+
+<script>
+    /* BANQUE DE QUESTIONS */
+    const DEFAULT_EQUATIONS = [
+        "C + O2 = CO2", "2H2 + O2 = 2H2O", "N2 + 3H2 = 2NH3", "CH4 + 2O2 = CO2 + 2H2O", "2Na + Cl2 = 2NaCl",
+        "C3H8 + 5O2 = 3CO2 + 4H2O", "4Fe + 3O2 = 2Fe2O3", "4Al + 3O2 = 2Al2O3", "C2H6O + 3O2 = 2CO2 + 3H2O", "2CuO + C = 2Cu + CO2",
+        "Fe[2+] + 2OH[-] = Fe(OH)2", "2Ag[+] + Cu = 2Ag + Cu[2+]", "Al[3+] + 3OH[-] = Al(OH)3", "H3O[+] + HO[-] = 2H2O", "2C4H10 + 13O2 = 8CO2 + 10H2O",
+        "MnO4[-] + 5Fe[2+] + 8H[+] = Mn[2+] + 5Fe[3+] + 4H2O", "S2O8[2-] + 2I[-] = 2SO4[2-] + I2", "Cr2O7[2-] + 6Fe[2+] + 14H[+] = 2Cr[3+] + 6Fe[3+] + 7H2O", "3Cu + 2NO3[-] + 8H[+] = 3Cu[2+] + 2NO + 4H2O", "2H2O2 = 2H2O + O2"
+    ];
+
+    /* ETAT GLOBAL */
+    let state = {
+        sessionId: "000",
+        equations: [],
+        currentQIndex: 0,
+        score: 0,
+        attempts: 3,
+        isActive: false,
+        mode: 'eval', 
+        shuffle: false,
+        showErrorColor: false,
+        revealedIndices: [] 
+    };
+    
+    let tempEquations = [];
+
+    /* INIT */
+    window.onload = function() {
+        const savedState = localStorage.getItem('chimieTestStateV2');
+        if (savedState) {
+            try {
+                const parsed = JSON.parse(savedState);
+                if (parsed.isActive && parsed.equations.length > 0) {
+                    state = parsed;
+                    restoreGame();
+                    return;
+                }
+            } catch(e) {}
+        }
+        showMenu();
+    };
+
+    /* CONFIG */
+    function prepareConfig(source, data = null) {
+        if (source === 'default') {
+            parseEquations(DEFAULT_EQUATIONS.join('\n'));
+        } else if (source === 'file') {
+            tempEquations = data;
+        }
+        // Reset des options
+        document.getElementById('shuffle-check').checked = false;
+        document.getElementById('color-check').checked = false; 
+        document.getElementById('config-modal').style.display = 'flex';
+    }
+
+    function selectMode(mode) {
+        state.mode = mode;
+        document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('selected'));
+        document.getElementById('opt-' + mode).classList.add('selected');
+    }
+
+    function closeModal() {
+        document.getElementById('config-modal').style.display = 'none';
+    }
+
+    function launchSession() {
+        state.shuffle = document.getElementById('shuffle-check').checked;
+        state.showErrorColor = document.getElementById('color-check').checked;
+        
+        let gameEquations = [...tempEquations];
+
+        if (state.shuffle) {
+            for (let i = gameEquations.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [gameEquations[i], gameEquations[j]] = [gameEquations[j], gameEquations[i]];
+            }
+        }
+        
+        state.equations = gameEquations;
+        initGame();
+        closeModal();
+    }
+
+    /* JEU */
+    function initGame() {
+        state.sessionId = Math.floor(Math.random() * 900) + 100;
+        state.currentQIndex = 0;
+        state.score = 0;
+        state.isActive = true;
+        state.revealedIndices = []; 
+
+        hideAll();
+        document.getElementById('game-section').style.display = 'flex';
+        document.getElementById('progress-container').style.display = 'block';
+        
+        if (state.mode === 'eval') {
+            document.getElementById('score-container').style.display = 'block';
+            document.getElementById('max-score').innerText = state.equations.length * 3;
+            document.getElementById('session-id-container').style.display = 'block';
+            document.getElementById('session-id').innerText = state.sessionId;
+            document.getElementById('attempts-container').style.display = 'inline';
+        } else {
+            document.getElementById('score-container').style.display = 'none';
+            document.getElementById('session-id-container').style.display = 'none';
+            document.getElementById('attempts-container').style.display = 'none';
+        }
+        
+        updateScoreDisplay();
+        loadQuestion(true);
+        saveState();
+    }
+
+    function loadQuestion(newQ = false, keptValues = {}) {
+        if(newQ) {
+            state.attempts = (state.mode === 'eval') ? 3 : 0; 
+            state.revealedIndices = [];
+        }
+        
+        document.getElementById('attempts').innerText = state.attempts;
+        document.getElementById('q-num').innerText = state.currentQIndex + 1;
+        document.getElementById('feedback').innerHTML = "";
+        document.getElementById('btn-check').style.display = "inline-block";
+        document.getElementById('btn-next').style.display = "none";
+        document.getElementById('progress').style.width = ((state.currentQIndex) / state.equations.length * 100) + "%";
+        
+        const q = state.equations[state.currentQIndex];
+        
+        const elBox = document.getElementById('equation-box');
+        const totalItems = q.reacts.length + q.prods.length;
+        if (totalItems > 6) elBox.style.fontSize = '0.9rem'; 
+        else if (totalItems > 4) elBox.style.fontSize = '1.2rem';
+        else elBox.style.fontSize = '1.5rem';
+
+        let globalIndex = 0;
+        let html = "";
+        const buildInputs = (arr, side) => {
+            arr.forEach((m, i) => {
+                let isRevealed = state.revealedIndices.includes(globalIndex);
+                let val = "";
+                if (isRevealed) {
+                    val = (m.c === 1 ? "" : m.c);
+                } else {
+                    if (!newQ && keptValues[globalIndex] !== undefined) {
+                        val = keptValues[globalIndex];
+                    }
+                }
+
+                let placeholder = (isRevealed && m.c === 1) ? "1" : "";
+                let classExtra = isRevealed ? "hint-input" : "";
+                let disabled = isRevealed ? "disabled" : "";
+
+                html += `<div class="molecule-group">
+                    <input type="number" min="1" class="${classExtra}" value="${val}" placeholder="${placeholder}" ${disabled} data-side="${side}" data-index="${i}" data-gidx="${globalIndex}">
+                    <span class="molecule">${m.f}</span>
+                </div>`;
+                if (i < arr.length - 1) html += `<span class="operator">+</span>`;
+                globalIndex++;
+            });
+        };
+        buildInputs(q.reacts, 'react'); html += `<span class="operator">➜</span>`; buildInputs(q.prods, 'prod');
+
+        document.getElementById('equation-box').innerHTML = html;
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener("keypress", (e) => { if (e.key === "Enter") checkAnswer(); });
+        });
+        let firstActive = document.querySelector('input:not(:disabled)');
+        if(firstActive) firstActive.focus();
+        
+        saveState();
+    }
+
+    function checkAnswer() {
+        const inputs = document.querySelectorAll('#equation-box input');
+        const q = state.equations[state.currentQIndex];
+        let allCorrect = true;
+
+        inputs.forEach(input => {
+            let val = parseInt(input.value); if (isNaN(val)) val = 1; 
+            const side = input.dataset.side; const index = input.dataset.index;
+            const target = (side === 'react') ? q.reacts[index].c : q.prods[index].c;
+            
+            if (val !== target) { 
+                allCorrect = false; 
+                if(!input.disabled && state.showErrorColor) input.classList.add('wrong-input'); 
+            } else { 
+                input.classList.remove('wrong-input'); 
+            }
+        });
+
+        if (allCorrect) {
+            if(state.mode === 'eval') state.score += state.attempts;
+            updateScoreDisplay();
+            document.getElementById('feedback').innerHTML = `<span class="msg-success">✅ Correct !</span>`;
+            lockInputs(true); showNextBtn();
+        } else {
+            if (state.mode === 'eval') {
+                state.attempts--; 
+                document.getElementById('attempts').innerText = state.attempts;
+                if (state.attempts > 0) {
+                    document.getElementById('feedback').innerHTML = `<span class="msg-error">❌ Erreur. Reste ${state.attempts} essai(s).</span>`;
+                } else { showSolution(); }
+            } else {
+                state.attempts++; 
+                if (state.attempts >= 2) { revealHint(q); } 
+                else { document.getElementById('feedback').innerHTML = `<span class="msg-error">❌ Incorrect. Essayez encore.</span>`; }
+            }
+        }
+        saveState();
+    }
+
+    function revealHint(q) {
+        let currentVals = {};
+        document.querySelectorAll('#equation-box input').forEach(input => {
+            currentVals[input.dataset.gidx] = input.value;
+        });
+
+        let availableGIdx = []; 
+        let onesGIdx = [];      
+        let currentGIdx = 0;
+
+        let checkSide = (arr) => {
+            arr.forEach(m => {
+                if (!state.revealedIndices.includes(currentGIdx)) {
+                    availableGIdx.push(currentGIdx);
+                    if (m.c === 1) onesGIdx.push(currentGIdx);
+                }
+                currentGIdx++;
+            });
+        };
+        checkSide(q.reacts); checkSide(q.prods);
+
+        if (availableGIdx.length > 0) {
+            let rand;
+            // Priorité aux 1
+            if (onesGIdx.length > 0) {
+                rand = onesGIdx[Math.floor(Math.random() * onesGIdx.length)];
+            } else {
+                rand = availableGIdx[Math.floor(Math.random() * availableGIdx.length)];
+            }
+
+            state.revealedIndices.push(rand);
+            
+            // Check auto-complete of "1"s
+            let remaining = availableGIdx.filter(idx => idx !== rand);
+            let getTargetCoeff = (idx) => {
+                 let counter = 0;
+                 for(let m of q.reacts) { if(counter === idx) return m.c; counter++; }
+                 for(let m of q.prods) { if(counter === idx) return m.c; counter++; }
+                 return 1;
+            };
+
+            let allRemainingAreOnes = true;
+            for (let rIdx of remaining) {
+                if (getTargetCoeff(rIdx) !== 1) {
+                    allRemainingAreOnes = false;
+                    break;
+                }
+            }
+
+            if (allRemainingAreOnes && remaining.length > 0) {
+                remaining.forEach(idx => state.revealedIndices.push(idx));
+                loadQuestion(false, currentVals);
+                document.getElementById('feedback').innerHTML = `<span class="msg-solution">⚠️ Correction complète (fin des '1').</span>`;
+                lockInputs(false);
+                showNextBtn();
+            } else if (remaining.length === 0) {
+                loadQuestion(false, currentVals);
+                document.getElementById('feedback').innerHTML = `<span class="msg-solution">⚠️ Correction complète.</span>`;
+                lockInputs(false);
+                showNextBtn();
+            } else {
+                loadQuestion(false, currentVals);
+                document.getElementById('feedback').innerHTML = `<span class="msg-solution">💡 Aide : Un coefficient a été révélé en vert.</span>`;
+            }
+        }
+    }
+
+    function showSolution() {
+        document.getElementById('feedback').innerHTML = `<span class="msg-solution">⚠️ Solution affichée (0 pt).</span>`;
+        const q = state.equations[state.currentQIndex];
+        document.querySelectorAll('#equation-box input').forEach(input => {
+            const side = input.dataset.side; const index = input.dataset.index;
+            const target = (side === 'react') ? q.reacts[index].c : q.prods[index].c;
+            input.value = target === 1 ? "" : target; if(target===1) input.placeholder = "1";
+            input.classList.remove('wrong-input'); input.classList.add('solution-input');
+        });
+        lockInputs(false); showNextBtn();
+    }
+
+    function lockInputs(success) {
+        document.querySelectorAll('input').forEach(i => { i.disabled = true; if(success) i.classList.add('correct-input'); });
+    }
+    function showNextBtn() { document.getElementById('btn-check').style.display = "none"; const btn = document.getElementById('btn-next'); btn.style.display = "inline-block"; btn.focus(); }
+
+    function nextQuestion() {
+        state.currentQIndex++;
+        if (state.currentQIndex < state.equations.length) { loadQuestion(true); } else { endGame(); }
+        saveState();
+    }
+
+    function endGame() {
+        hideAll();
+        document.getElementById('end-section').style.display = 'flex';
+        
+        if (state.mode === 'eval') {
+            document.getElementById('end-id-box').style.display = 'block';
+            document.getElementById('final-id').innerText = state.sessionId;
+            document.getElementById('end-score-box').style.display = 'block';
+            
+            let maxBrut = state.equations.length * 3;
+            document.getElementById('final-score-val').innerText = state.score;
+            document.getElementById('final-max-val').innerText = maxBrut;
+            let note20 = (state.score / maxBrut) * 20;
+            let noteArrondie = Math.ceil(note20 * 2) / 2;
+            document.getElementById('final-mark-val').innerText = noteArrondie;
+            
+            document.getElementById('final-comment').innerText = "Examen terminé.";
+        } else {
+            document.getElementById('end-id-box').style.display = 'none';
+            document.getElementById('end-score-box').style.display = 'none';
+            document.getElementById('final-comment').innerText = "🎉 Entraînement terminé !";
+        }
+        
+        localStorage.removeItem('chimieTestStateV2');
+        state.isActive = false;
+    }
+
+    function saveState() { localStorage.setItem('chimieTestStateV2', JSON.stringify(state)); }
+    function restoreGame() {
+        hideAll();
+        document.getElementById('game-section').style.display = 'flex';
+        document.getElementById('progress-container').style.display = 'block';
+        if(state.mode === 'eval') {
+            document.getElementById('score-container').style.display = 'block';
+            document.getElementById('session-id-container').style.display = 'block';
+            document.getElementById('session-id').innerText = state.sessionId;
+            document.getElementById('max-score').innerText = state.equations.length * 3;
+            document.getElementById('attempts-container').style.display = 'inline';
+        }
+        updateScoreDisplay();
+        loadQuestion(false);
+    }
+    function clearStorageAndMenu() { localStorage.removeItem('chimieTestStateV2'); state.isActive = false; state.equations = []; showMenu(); }
+    function confirmExit() { if (state.isActive) { if (confirm("Quitter effacera la progression. Continuer ?")) clearStorageAndMenu(); } else showMenu(); }
+    function updateScoreDisplay() { document.getElementById('score').innerText = state.score; }
+
+    function parseEquations(text) {
+        let parsedEq = [];
+        const lines = text.split(/\r?\n/);
+        lines.forEach(line => {
+            line = line.trim(); if (!line || line.startsWith("#")) return; 
+            const parts = line.split('='); if (parts.length !== 2) return;
+            const parseSide = (str) => {
+                let safeStr = str.replace(/\[(.*?)\]/g, (match) => match.replace(/\+/g, "##PLUS##"));
+                return safeStr.split('+').map(s => {
+                    s = s.trim(); if(!s) return null;
+                    s = s.replace(/##PLUS##/g, "+");
+                    const match = s.match(/^(\d+)?(.*)$/);
+                    let coeff = match[1] ? parseInt(match[1]) : 1;
+                    let formulaRaw = match[2].trim();
+                    let display = formulaRaw.replace(/\[(.*?)\]/g, "<sup>$1</sup>");
+                    let parts = display.split(/(<sup>.*?<\/sup>)/g);
+                    let formattedParts = parts.map(p => { if (p.startsWith("<sup")) return p; return p.replace(/(\d+)/g, "<sub>$1</sub>"); });
+                    return { f: formattedParts.join(""), c: coeff };
+                }).filter(x => x !== null);
+            };
+            try { parsedEq.push({ reacts: parseSide(parts[0]), prods: parseSide(parts[1]) }); } catch (e) {}
+        });
+        tempEquations = parsedEq;
+    }
+    
+    function handleFileSelect(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            let content = e.target.result;
+            if (content.startsWith("***")) {
+                try { content = decodeURIComponent(escape(window.atob(content.substring(3)))); } catch(e) {}
+            }
+            parseEquations(content);
+            prepareConfig('file', tempEquations);
+        };
+        reader.readAsText(file);
+    }
+    
+    function showMenu() { hideAll(); document.getElementById('menu-section').style.display = 'flex'; document.getElementById('score-container').style.display = 'none'; document.getElementById('progress-container').style.display = 'none'; document.getElementById('session-id-container').style.display = 'none'; }
+    function hideAll() { document.querySelectorAll('.section').forEach(el => el.style.display = 'none'); }
+    function showFileLoad() { hideAll(); document.getElementById('load-section').style.display = 'flex'; }
+    function showEncryptTool() { hideAll(); document.getElementById('encrypt-section').style.display = 'flex'; }
+    function generateAndDownload(encrypt) {
+        const text = document.getElementById('input-equations').value; if (!text.trim()) return;
+        let content = text; let filename = "test_chimie.txt";
+        if (encrypt) { let b64 = window.btoa(unescape(encodeURIComponent(text))); content = "***" + b64; filename = "test_chimie_secure.txt"; }
+        const blob = new Blob([content], { type: 'text/plain' });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; link.click();
+    }
+</script>
+</body>
+</html>

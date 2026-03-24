@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Banc Optique (Couleurs Dynamiques)</title>
+    <style>
+        /* RESET CSS */
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f4f4;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* BARRE D'OUTILS */
+        #toolbar {
+            background: #fff; padding: 10px 20px;
+            border-bottom: 2px solid #ddd;
+            display: flex; gap: 10px; align-items: center;
+            height: 60px; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+        
+        h2 { margin: 0; margin-right: 20px; color: #2c3e50; font-size: 1.2rem; }
+
+        button {
+            padding: 8px 12px; border: none; border-radius: 4px;
+            color: white; font-weight: 600; cursor: pointer;
+            font-size: 0.9rem; transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.95); }
+        
+        .btn-lens-conv { background-color: #3498db; }
+        .btn-lens-div { background-color: #e67e22; }
+        .btn-reset { background-color: #c0392b; margin-left: auto; }
+
+        /* PANNEAU PROPRIÉTÉS */
+        #properties {
+            background: #e8e8e8; border-bottom: 1px solid #ccc;
+            padding: 5px 20px; height: 45px; display: flex; align-items: center; gap: 15px;
+            font-size: 0.9rem; color: #333; display: none;
+        }
+        input[type=number] { width: 70px; padding: 4px; border: 1px solid #ccc; border-radius: 3px;}
+
+        /* ZONE DE DESSIN */
+        #viewport {
+            flex-grow: 1; position: relative; background: white; cursor: crosshair;
+        }
+        
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        #legend {
+            position: absolute; bottom: 10px; left: 10px;
+            background: rgba(255,255,255,0.9); padding: 8px 12px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;
+            pointer-events: none; user-select: none; color: #444;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="toolbar">
+        <h2>🔭 Banc Optique</h2>
+        <button class="btn-lens-conv" onclick="addLens(150)">+ Lentille Convergente</button>
+        <button class="btn-lens-div" onclick="addLens(-150)">+ Lentille Divergente</button>
+        <button class="btn-reset" onclick="resetAll()">Tout Effacer</button>
+    </div>
+
+    <div id="properties">
+        <strong id="prop-name">Element</strong>
+        <label>Position X: <input type="number" id="prop-x" oninput="updateProp()"></label>
+        <span id="prop-f-group"><label>Focale f': <input type="number" id="prop-f" oninput="updateProp()"></label></span>
+        <span id="prop-h-group"><label>Hauteur: <input type="number" id="prop-h" oninput="updateProp()"></label></span>
+        <button onclick="deleteCurrent()" style="background:#e74c3c; padding:4px 10px; font-size:0.8rem; margin-left:auto;">Supprimer</button>
+    </div>
+
+    <div id="viewport">
+        <!-- Canvas sécurisé -->
+        <canvas id="theCanvas"></canvas>
+        
+        <div id="legend">
+            <span style="color:#000; font-weight:bold">Noir</span>: Objet Initial | 
+            <span style="color:#666">Grisé</span>: Construction | 
+            La couleur des rayons correspond à la lentille traversée.
+        </div>
+    </div>
+
+<script>
+    // --- CONFIGURATION ---
+    const canvas = document.getElementById('theCanvas');
+    const ctx = canvas.getContext('2d');
+    const propPanel = document.getElementById('properties');
+
+    let W, H, AxisY;
+    let elements = [];
+    let source = { type: 'source', x: 50, h: 80, dragging: false };
+    let selected = null;
+
+    // Palette de couleurs vives pour les lentilles (Max 6 comme demandé implicitement)
+    const LENS_COLORS = [
+        "#e74c3c", // Rouge
+        "#2ecc71", // Vert
+        "#3498db", // Bleu
+        "#9b59b6", // Violet
+        "#f1c40f", // Jaune
+        "#1abc9c"  // Turquoise
+    ];
+
+    // --- INITIALISATION ---
+    function init() {
+        resize();
+        window.addEventListener('resize', resize);
+    }
+
+    function resize() {
+        W = canvas.parentElement.clientWidth;
+        H = canvas.parentElement.clientHeight;
+        canvas.width = W;
+        canvas.height = H;
+        AxisY = H / 2;
+        draw();
+    }
+
+    function resetAll() {
+        elements = [];
+        source.x = 50; source.h = 80;
+        selected = null;
+        updatePanel();
+        draw();
+    }
+
+    function addLens(f) {
+        if (elements.length >= 6) {
+            alert("Maximum 6 lentilles pour garder le schéma lisible !");
+            return;
+        }
+        // Assigne une couleur unique basée sur l'index
+        let color = LENS_COLORS[elements.length % LENS_COLORS.length];
+        elements.push({ 
+            type: 'lens', 
+            f: f, 
+            x: W/2 + elements.length*60, 
+            color: color,
+            dragging: false 
+        });
+        draw();
+    }
+
+    // --- INTERACTION SOURIS ---
+    function getMouse(e) {
+        const r = canvas.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    canvas.addEventListener('mousedown', e => {
+        const m = getMouse(e);
+        // 1. Source
+        if (Math.abs(m.x - source.x) < 20) {
+            selected = source; source.dragging = true; updatePanel(); return;
+        }
+        // 2. Elements
+        for (let el of elements) {
+            if (Math.abs(m.x - el.x) < 20) {
+                selected = el; el.dragging = true; updatePanel(); return;
+            }
+        }
+        selected = null; updatePanel(); draw();
+    });
+
+    canvas.addEventListener('mousemove', e => {
+        if (selected && selected.dragging) {
+            const m = getMouse(e);
+            selected.x = m.x;
+            if(selected === source) {
+                if(selected.x > W) selected.x = W;
+                if(selected.x < 0) selected.x = 0;
+            }
+            updatePanelUI();
+            draw();
+        }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        if (selected) selected.dragging = false;
+    });
+
+    // --- CALCUL OPTIQUE ---
+    function computeOpticalPath() {
+        let activeElements = elements.slice().sort((a,b) => a.x - b.x);
+        activeElements = activeElements.filter(e => e.x > source.x);
+
+        let currentObj = { x: source.x, h: source.h, infinite: false };
+        let steps = [];
+
+        for (let el of activeElements) {
+            let p = -(el.x - currentObj.x);
+            let f = el.f;
+            let pp = 0; // p'
+            let infinite = false;
+
+            if (Math.abs(p + f) < 0.1) infinite = true;
+            else pp = (p * f) / (p + f);
+
+            let nextImg = { x: 0, h: 0, infinite: infinite };
+            if (!infinite) {
+                nextImg.x = el.x + pp;
+                let gamma = pp / p;
+                nextImg.h = currentObj.h * gamma;
+            } else {
+                nextImg.x = el.x + 10000; 
+                nextImg.h = currentObj.h * 100; 
+            }
+
+            steps.push({ obj: {...currentObj}, elem: el, img: nextImg });
+            currentObj = nextImg;
+        }
+        return steps;
+    }
+
+    // --- DESSIN ---
+    function draw() {
+        ctx.clearRect(0,0,W,H);
+        drawGrid();
+
+        // Axe
+        ctx.beginPath(); ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
+        ctx.moveTo(0, AxisY); ctx.lineTo(W, AxisY); ctx.stroke();
+
+        // Elements (avec filigrane)
+        for (let el of elements) drawElement(el);
+
+        // Source (Noir)
+        drawArrow(source.x, source.h, "#000", "AB", false);
+
+        // Rayons
+        const steps = computeOpticalPath();
+        steps.forEach((step, i) => {
+            // La couleur des rayons est celle de la lentille traversée
+            drawRays(step, step.elem.color);
+            
+            // L'image résultante prend aussi la couleur de la lentille qui l'a créée
+            if (!step.img.infinite) {
+                let name = (i === steps.length-1) ? "A'B'" : "A"+(i+1)+"B"+(i+1);
+                drawArrow(step.img.x, step.img.h, step.elem.color, name, true);
+            }
+        });
+    }
+
+    function drawGrid() {
+        ctx.beginPath(); ctx.strokeStyle = "#e5e5e5"; ctx.lineWidth = 1;
+        for(let x=0; x<W; x+=20) { ctx.moveTo(x,0); ctx.lineTo(x,H); }
+        for(let y=0; y<H; y+=20) { ctx.moveTo(0,y); ctx.lineTo(W,y); }
+        ctx.stroke();
+    }
+
+    function drawElement(el) {
+        // Couleur de base ou surbrillance si sélectionné
+        let col = el.color; 
+        let lineWidth = (el === selected) ? 4 : 2; // Plus gras si sélectionné
+        
+        let widthSym = 10;
+        let hSym = 120;
+
+        // Filigrane
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = "rgba(0,0,0,0.1)";
+        ctx.lineWidth = 1;
+        ctx.moveTo(el.x, 0); ctx.lineTo(el.x, H);
+        ctx.stroke(); ctx.setLineDash([]);
+
+        // Corps
+        ctx.beginPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = lineWidth;
+        ctx.moveTo(el.x, AxisY - hSym);
+        ctx.lineTo(el.x, AxisY + hSym);
+        ctx.stroke();
+
+        // Symboles
+        ctx.beginPath();
+        ctx.fillStyle = col;
+        
+        if (el.f > 0) { // Convergente
+            // Haut
+            ctx.moveTo(el.x, AxisY - hSym); 
+            ctx.lineTo(el.x - widthSym, AxisY - hSym + 15);
+            ctx.lineTo(el.x + widthSym, AxisY - hSym + 15);
+            ctx.lineTo(el.x, AxisY - hSym);
+            // Bas
+            ctx.moveTo(el.x, AxisY + hSym); 
+            ctx.lineTo(el.x - widthSym, AxisY + hSym - 15);
+            ctx.lineTo(el.x + widthSym, AxisY + hSym - 15);
+            ctx.lineTo(el.x, AxisY + hSym);
+            ctx.fill();
+        } else { // Divergente
+            // Haut
+            ctx.moveTo(el.x, AxisY - hSym); 
+            ctx.lineTo(el.x - widthSym, AxisY - hSym - 15);
+            ctx.lineTo(el.x + widthSym, AxisY - hSym - 15);
+            ctx.lineTo(el.x, AxisY - hSym);
+            // Bas
+            ctx.moveTo(el.x, AxisY + hSym); 
+            ctx.lineTo(el.x - widthSym, AxisY + hSym + 15);
+            ctx.lineTo(el.x + widthSym, AxisY + hSym + 15);
+            ctx.lineTo(el.x, AxisY + hSym);
+            ctx.fill();
+        }
+        
+        drawFocus(el.x - el.f, "F", col);
+        drawFocus(el.x + el.f, "F'", col);
+    }
+
+    function drawFocus(x, txt, col) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(x, AxisY, 2, 0, Math.PI*2);
+        ctx.fill();
+        ctx.font = "bold 11px Arial";
+        ctx.fillText(txt, x-5, AxisY+15);
+    }
+
+    function drawArrow(x, h, color, label, dashed) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        if(dashed) ctx.setLineDash([5,5]);
+        
+        ctx.moveTo(x, AxisY);
+        ctx.lineTo(x, AxisY - h);
+        
+        let dir = h > 0 ? 1 : -1;
+        ctx.moveTo(x, AxisY - h);
+        ctx.lineTo(x - 5, AxisY - h + 7*dir);
+        ctx.moveTo(x, AxisY - h);
+        ctx.lineTo(x + 5, AxisY - h + 7*dir);
+        
+        ctx.stroke(); ctx.setLineDash([]);
+
+        ctx.fillStyle = color;
+        ctx.font = "bold 12px Arial";
+        ctx.fillText(label, x-10, AxisY - h - 10*dir);
+        
+        // Valeur position
+        ctx.fillStyle = "#888";
+        ctx.font = "10px Arial";
+        ctx.fillText(Math.round(x), x-10, AxisY + 15);
+    }
+
+    function drawRays(step, color) {
+        if (step.img.infinite) return;
+
+        let B = { x: step.obj.x, y: AxisY - step.obj.h };
+        let L_x = step.elem.x; 
+        let Bp = { x: step.img.x, y: AxisY - step.img.h };
+
+        // Tous les rayons de cette étape prennent la couleur de la lentille
+        // On utilise juste des styles de traits (plein/pointillé) pour différencier virtuels/réels si besoin
+        // Ici on garde tout en trait plein fin pour la clarté
+
+        // 1. Rayon Parallèle -> F'
+        let I1 = { x: L_x, y: B.y };
+        drawSegment(B, I1, color);
+        drawSegment(I1, Bp, color, true);
+
+        // 2. Rayon Centre
+        let O = { x: L_x, y: AxisY };
+        drawSegment(B, O, color);
+        drawSegment(O, Bp, color, true);
+
+        // 3. Rayon Foyer
+        let I2 = { x: L_x, y: Bp.y };
+        drawSegment(B, I2, color); 
+        drawSegment(I2, Bp, color, true);
+    }
+
+    function drawSegment(p1, p2, col, extend=false) {
+        ctx.beginPath();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1; // Trait fin pour les rayons
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        if(extend) {
+            let dx = p2.x - p1.x;
+            let dy = p2.y - p1.y;
+            ctx.beginPath();
+            ctx.moveTo(p2.x, p2.y);
+            // Prolongement modéré
+            ctx.lineTo(p2.x + dx*0.3, p2.y + dy*0.3);
+            ctx.stroke();
+        }
+    }
+
+    // --- UI ---
+    function updatePanel() {
+        if (!selected) { propPanel.style.display = "none"; return; }
+        propPanel.style.display = "flex";
+        updatePanelUI();
+    }
+
+    function updatePanelUI() {
+        if(!selected) return;
+        document.getElementById('prop-x').value = Math.round(selected.x);
+        let grpF = document.getElementById('prop-f-group');
+        let grpH = document.getElementById('prop-h-group');
+        let name = document.getElementById('prop-name');
+
+        if (selected.type === 'source') {
+            name.innerText = "Source AB";
+            name.style.color = "#000";
+            grpF.style.display = "none"; grpH.style.display = "inline";
+            document.getElementById('prop-h').value = Math.round(selected.h);
+        } else {
+            name.innerText = selected.f > 0 ? "Lentille Convergente" : "Lentille Divergente";
+            name.style.color = selected.color; // Nom de la couleur de la lentille
+            grpF.style.display = "inline"; grpH.style.display = "none";
+            document.getElementById('prop-f').value = Math.round(selected.f);
+        }
+    }
+
+    function updateProp() {
+        if(!selected) return;
+        selected.x = parseFloat(document.getElementById('prop-x').value);
+        if(selected.type === 'source') selected.h = parseFloat(document.getElementById('prop-h').value);
+        else selected.f = parseFloat(document.getElementById('prop-f').value);
+        draw();
+    }
+
+    function deleteCurrent() {
+        if(selected && selected !== source) {
+            elements = elements.filter(e => e !== selected);
+            selected = null; updatePanel(); draw();
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>

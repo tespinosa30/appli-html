@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projectile : V39 (Crédit OK + CSV)</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #f4f6f7;
+            --panel-bg: #ffffff;
+            --border-color: #bdc3c7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            overflow: hidden;
+        }
+
+        #left-panel {
+            width: 50%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-right: 2px solid var(--border-color);
+            background-color: var(--panel-bg);
+            padding: 10px;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #controls {
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            overflow-y: auto;
+            max-height: 40vh;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .input-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 2px;
+        }
+
+        input[type="number"] {
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 70px;
+        }
+
+        input[type="range"] {
+            cursor: pointer;
+        }
+
+        button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            background-color: var(--accent-color);
+            transition: background 0.2s;
+            font-size: 0.8rem;
+        }
+        button:hover { background-color: #2980b9; }
+        button.stop { background-color: #e74c3c; }
+        button.stop.resume { background-color: #27ae60; }
+        button.reset { background-color: #95a5a6; }
+        button.reset:hover { background-color: #7f8c8d; }
+
+        #right-panel {
+            width: 50%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-color);
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .graph-container {
+            flex: 1;
+            min-height: 0;
+            background-color: var(--panel-bg);
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .graph-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            height: 35px;
+            flex-shrink: 0;
+            gap: 8px;
+        }
+
+        .graph-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .graph-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+        }
+
+        select {
+            padding: 4px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 0.8rem;
+        }
+
+        .chart-wrapper {
+            flex-grow: 1;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+        }
+
+        #chart1, #chart2, #chart3 {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+        .vector-options {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .ortho-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 10px;
+            font-size: 0.85rem;
+            color: #555;
+            background: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .friction-group {
+            border: 1px dashed #bdc3c7;
+            padding: 5px 10px;
+            border-radius: 4px;
+            background-color: #fcfcfc;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        /* Modale CSV */
+        #csv-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        #csv-modal.hidden {
+            display: none !important;
+        }
+        #csv-dialog {
+            background: #ffffff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            width: 280px;
+            font-size: 0.85rem;
+        }
+        #csv-dialog h3 {
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: var(--primary-color);
+        }
+        #csv-dialog label {
+            font-size: 0.8rem;
+            margin-bottom: 3px;
+        }
+        #csv-dialog input[type="text"] {
+            width: 100%;
+            padding: 4px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 0.8rem;
+        }
+        #csv-dialog .buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        #csv-count-value {
+            font-weight: bold;
+            margin-left: 4px;
+        }
+
+        .csv-btn {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            background-color: #7f8c8d;
+        }
+        .csv-btn:hover {
+            background-color: #636e72;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SECTION GAUCHE -->
+    <div id="left-panel">
+        <div id="canvas-container">
+            <canvas id="simCanvas"></canvas>
+        </div>
+
+        <div id="controls">
+            <!-- Paramètres -->
+            <div class="control-group">
+                <div class="input-wrapper">
+                    <label>Vitesse v0 [m/s]</label>
+                    <input type="number" id="v0" value="50" min="0" max="200" onchange="forceUpdate()">
+                </div>
+                <div class="input-wrapper">
+                    <label>Hauteur h [m]</label>
+                    <input type="number" id="h0" value="0" min="0" max="1000" onchange="forceUpdate()">
+                </div>
+                <div class="input-wrapper">
+                    <label>Angle α [deg]</label>
+                    <input type="number" id="angle" value="45" min="0" max="90" onchange="forceUpdate()">
+                </div>
+                <div class="input-wrapper">
+                    <label>Masse m [kg]</label>
+                    <input type="number" id="mass" value="1.0" min="0.1" max="100" step="0.1" onchange="forceUpdate()">
+                </div>
+                <div class="input-wrapper">
+                    <label>Gravité g [m/s²]</label>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <input type="range" id="g-slider" min="4" max="15" step="0.1" value="9.8" style="width:80px;">
+                        <span id="g-val" style="font-size:0.85em; width:30px; text-align:right;">9.8</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frottements ET Modèles -->
+            <div class="control-group friction-group">
+                <div style="display:flex; gap:15px; align-items:center; width:100%;">
+                    <div class="input-wrapper vector-options">
+                        <label style="cursor:pointer; color:#e74c3c;">
+                            <input type="checkbox" id="friction-check" onchange="forceUpdate()"> Frottements de l'air
+                        </label>
+                    </div>
+
+                    <div class="input-wrapper" id="friction-slider-wrapper" style="opacity:0.5; pointer-events:none;">
+                        <label>Coeff. k</label>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <input type="range" id="k-slider" min="0.0001" max="0.01" step="0.0001" value="0.001" style="width:100px;" oninput="updateKDisplay()" onchange="forceUpdate()">
+                            <span id="k-val" style="font-size:0.85em; width:45px; text-align:right;">0.001</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="model-selector" style="display:flex; gap:15px; font-size:0.85rem; padding-left:25px; opacity:0.5; pointer-events:none;">
+                     <label style="font-weight:normal; cursor:pointer;"><input type="radio" name="frict-model" value="quad" checked onchange="switchFrictionModel()"> Quadratique (-kv²)</label>
+                     <label style="font-weight:normal; cursor:pointer;"><input type="radio" name="frict-model" value="lin" onchange="switchFrictionModel()"> Linéaire (-kv)</label>
+                </div>
+            </div>
+
+            <!-- Options Visuelles -->
+            <div class="control-group">
+                <div class="input-wrapper vector-options">
+                    <label style="margin-bottom:0;">Vecteurs :</label>
+                    <label><input type="checkbox" id="show-v" checked onchange="drawFrame()"> v</label>
+                    <label><input type="checkbox" id="show-a" checked onchange="drawFrame()"> a</label>
+                </div>
+                <div class="ortho-option">
+                    <input type="checkbox" id="ortho-mode">
+                    <label for="ortho-mode" style="font-weight:normal; margin-bottom:0; cursor:pointer;">Repère Orthonormé</label>
+                </div>
+                <div class="input-wrapper" style="flex-grow: 1; max-width: 150px;">
+                    <label>Animation (x)</label>
+                    <input type="range" id="speed" min="0.1" max="5.0" step="0.1" value="1.0" style="width: 100%;">
+                    <div style="text-align: right; font-size: 0.8em;"><span id="speed-val">1.0</span></div>
+                </div>
+            </div>
+
+            <!-- GESTION DES GRAPHES -->
+            <div class="control-group" style="background: #fff; padding: 5px; border-radius: 4px; border: 1px solid #ddd;">
+                <label style="width: 100%;">Affichage des Graphes :</label>
+                <div class="vector-options">
+                    <label><input type="checkbox" id="check-g1" checked onchange="toggleGraph(0)"> G1</label>
+                    <label><input type="checkbox" id="check-g2" checked onchange="toggleGraph(1)"> G2</label>
+                    <label><input type="checkbox" id="check-g3" checked onchange="toggleGraph(2)"> G3</label>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <button id="btn-start">Lancer</button>
+                <button id="btn-stop" class="stop">Pause</button>
+                <button id="btn-reset" class="reset">Réinitialiser</button>
+                <div style="margin-left:auto; font-size:0.8em; color:#555; text-align:right;">
+                    <div>t : <span id="time-display">0.00</span> s</div>
+                    <div style="font-size:0.7em; opacity:0.8;">
+                        Espinosa T. – Lycée Albert Einstein
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION DROITE -->
+    <div id="right-panel">
+        <div class="graph-container" id="container-g1">
+            <div class="graph-header">
+                <div class="graph-header-left">
+                    <span class="graph-title">Graphe 1</span>
+                    <button class="csv-btn" onclick="openCsvModal(0)">CSV</button>
+                </div>
+                <select id="select-g1" onchange="resetGraph(0)">
+                    <optgroup label="Cinématique">
+                        <option value="x">x(t)</option>
+                        <option value="z" selected>z(t)</option>
+                        <option value="vx">Vx(t)</option>
+                        <option value="vz">Vz(t)</option>
+                        <option value="v">v(t)</option>
+                        <option value="ax">ax(t)</option>
+                        <option value="az">az(t)</option>
+                    </optgroup>
+                    <optgroup label="Énergétique">
+                        <option value="Ec">Ec(t)</option>
+                        <option value="Ep">Ep(t)</option>
+                        <option value="Em">Em(t)</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chart1"></canvas>
+            </div>
+        </div>
+
+        <div class="graph-container" id="container-g2">
+            <div class="graph-header">
+                <div class="graph-header-left">
+                    <span class="graph-title">Graphe 2</span>
+                    <button class="csv-btn" onclick="openCsvModal(1)">CSV</button>
+                </div>
+                <select id="select-g2" onchange="resetGraph(1)">
+                    <optgroup label="Cinématique">
+                        <option value="x" selected>x(t)</option>
+                        <option value="z">z(t)</option>
+                        <option value="vx">Vx(t)</option>
+                        <option value="vz">Vz(t)</option>
+                        <option value="v">v(t)</option>
+                        <option value="ax">ax(t)</option>
+                        <option value="az">az(t)</option>
+                    </optgroup>
+                    <optgroup label="Énergétique">
+                        <option value="Ec">Ec(t)</option>
+                        <option value="Ep">Ep(t)</option>
+                        <option value="Em">Em(t)</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chart2"></canvas>
+            </div>
+        </div>
+
+        <div class="graph-container" id="container-g3">
+            <div class="graph-header">
+                <div class="graph-header-left">
+                    <span class="graph-title">Graphe 3</span>
+                    <button class="csv-btn" onclick="openCsvModal(2)">CSV</button>
+                </div>
+                <select id="select-g3" onchange="resetGraph(2)">
+                    <optgroup label="Cinématique">
+                        <option value="x">x(t)</option>
+                        <option value="z">z(t)</option>
+                        <option value="vx">Vx(t)</option>
+                        <option value="vz">Vz(t)</option>
+                        <option value="v" selected>v(t)</option>
+                        <option value="ax">ax(t)</option>
+                        <option value="az">az(t)</option>
+                    </optgroup>
+                    <optgroup label="Énergétique">
+                        <option value="Ec">Ec(t)</option>
+                        <option value="Ep">Ep(t)</option>
+                        <option value="Em">Em(t)</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="chart3"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fenêtre modale pour l'export CSV -->
+    <div id="csv-modal" class="hidden">
+        <div id="csv-dialog">
+            <h3>Exporter en CSV</h3>
+            <p>Grandeur : <span id="csv-modal-var" style="font-weight:bold;"></span></p>
+            <div style="margin-top:6px;">
+                <label for="csv-count">Nombre de points :</label>
+                <input type="range" id="csv-count" min="10" max="100" value="100">
+                <span id="csv-count-value">100</span>
+            </div>
+            <div style="margin-top:6px;">
+                <label for="csv-filename">Nom du fichier :</label>
+                <input type="text" id="csv-filename" value="export.csv">
+            </div>
+            <div class="buttons">
+                <button class="reset" type="button" onclick="closeCsvModal()">Annuler</button>
+                <button type="button" onclick="confirmCsvExport()">Exporter</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ETAT GLOBAL ---
+        let state = {
+            g: 9.81, t: 0, running: false, paused: false, speedMultiplier: 1.0,
+            v0: 50, h0: 0, angleRad: Math.PI/4, mass: 1.0,
+            friction: false, k: 0.001,
+            computedPoints: [],
+            t_max_current: 0,
+            lastShotData: null,
+            history: [],
+            globalBounds: { xMax: 10, zMax: 10, tMax: 1, vMax: 50, EMax: 10 },
+            hoverPhys: null
+        };
+        let animationId = null;
+
+        // Export CSV
+        let csvCurrentPoints = [];
+        let csvCurrentVariable = 'z';
+        let csvCurrentLabel = 'z(t)';
+
+        // --- CANVAS ---
+        const simCanvas = document.getElementById('simCanvas');
+        const ctx = simCanvas.getContext('2d');
+        let scaleX = 10;
+        let scaleZ = 10;
+        let origin = { x: 50, y: 0 };
+
+        function resizeSimulationCanvas() {
+            if (!simCanvas.parentElement) return;
+            const w = simCanvas.parentElement.clientWidth;
+            const h = simCanvas.parentElement.clientHeight;
+            if (w === 0 || h === 0) return;
+            simCanvas.width = w;
+            simCanvas.height = h;
+            origin.y = simCanvas.height - 30;
+            drawFrame();
+        }
+        window.addEventListener('resize', () => {
+            resizeSimulationCanvas();
+            updateScales();
+            setTimeout(() => { charts.forEach(c => c.resize()); }, 100);
+        });
+
+        // --- MOTEUR PHYSIQUE ---
+        function computeFullTrajectory() {
+            const points = [];
+            let v0 = parseFloat(document.getElementById('v0').value); if(isNaN(v0)) v0 = 50;
+            let h0 = parseFloat(document.getElementById('h0').value); if(isNaN(h0)) h0 = 0;
+            let angle = parseFloat(document.getElementById('angle').value); if(isNaN(angle)) angle = 45;
+            let m = parseFloat(document.getElementById('mass').value); if(isNaN(m) || m<=0) m = 1.0;
+
+            angle = angle * Math.PI / 180;
+            const g = state.g;
+            const useFriction = document.getElementById('friction-check').checked;
+            const k = parseFloat(document.getElementById('k-slider').value);
+            const frictModel = document.querySelector('input[name="frict-model"]:checked').value;
+
+            const vy_init = v0 * Math.sin(angle);
+            const T_est = (vy_init + Math.sqrt(vy_init*vy_init + 2*g*h0)) / g;
+            let dt = 0.01;
+            if(T_est > 0) dt = Math.min(0.01, T_est / 200);
+
+            let t = 0;
+            let x = 0, z = h0;
+            let vx = v0 * Math.cos(angle);
+            let vz = v0 * Math.sin(angle);
+
+            points.push(makePoint(t, x, z, vx, vz, 0, -g, m, g));
+            let running = true, count = 0;
+
+            while (running && count < 20000) {
+                const x_prev = x, z_prev = z;
+                const vx_prev = vx, vz_prev = vz;
+                const t_prev = t;
+
+                let ax, az;
+                if (useFriction) {
+                    let fx, fz;
+                    if (frictModel === 'quad') {
+                        const v = Math.sqrt(vx*vx + vz*vz);
+                        fx = -k * v * vx;
+                        fz = -k * v * vz;
+                    } else {
+                        fx = -k * vx;
+                        fz = -k * vz;
+                    }
+                    ax = fx / m;
+                    az = -g + (fz / m);
+                } else {
+                    ax = 0;
+                    az = -g;
+                }
+
+                vx += ax * dt; vz += az * dt;
+                x += vx * dt; z += vz * dt;
+                t += dt;
+
+                if (z < 0) {
+                    const fraction = (0 - z_prev) / (z - z_prev);
+                    const t_impact = t_prev + fraction * dt;
+                    const x_impact = x_prev + (x - x_prev) * fraction;
+                    const z_impact = 0;
+                    const vx_impact = vx_prev + (vx - vx_prev) * fraction;
+                    const vz_impact = vz_prev + (vz - vz_prev) * fraction;
+                    points.push(makePoint(t_impact, x_impact, z_impact, vx_impact, vz_impact, ax, az, m, g));
+                    running = false;
+                } else {
+                    points.push(makePoint(t, x, z, vx, vz, ax, az, m, g));
+                }
+                count++;
+            }
+            return points;
+        }
+
+        function makePoint(t, x, z, vx, vz, ax, az, m, g) {
+            const v = Math.sqrt(vx*vx + vz*vz);
+            const a = Math.sqrt(ax*ax + az*az);
+            const Ec = 0.5 * m * v * v;
+            const Ep = m * g * Math.max(0, z);
+            const Em = Ec + Ep;
+            return { t, x, z, vx, vz, v, ax, az, a, Ec, Ep, Em };
+        }
+
+        // --- INTERACTION CANVAS ---
+        simCanvas.addEventListener('mousemove', (e) => {
+            if ((state.running && !state.paused)) {
+                if(state.hoverPhys) { state.hoverPhys = null; drawFrame(); clearChartHighlights(); }
+                return;
+            }
+            if(state.computedPoints.length === 0) return;
+
+            const rect = simCanvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            let minDist = Infinity; let closestP = null;
+
+            for (let p of state.computedPoints) {
+                if (!state.hoverPhys && state.t === 0 && !state.running) {
+                    if (p.t === 0) {
+                        const px = origin.x + p.x * scaleX;
+                        const py = origin.y - p.z * scaleZ;
+                        const dist = Math.hypot(mx - px, my - py);
+                        if (dist < 40) closestP = p;
+                    }
+                    break;
+                }
+                if (state.running && p.t > state.t) break;
+                const px = origin.x + p.x * scaleX;
+                const py = origin.y - p.z * scaleZ;
+                const dist = Math.hypot(mx - px, my - py);
+                if (dist < 40 && dist < minDist) { minDist = dist; closestP = p; }
+            }
+
+            if (closestP) { state.hoverPhys = closestP; drawFrame(); highlightOnCharts(closestP.t); }
+            else if (state.hoverPhys) { state.hoverPhys = null; drawFrame(); clearChartHighlights(); }
+        });
+        simCanvas.addEventListener('mouseleave', () => {
+            if (state.hoverPhys) { state.hoverPhys = null; drawFrame(); clearChartHighlights(); }
+        });
+
+        // --- CHARTS ---
+        const containerIds = ['container-g1', 'container-g2', 'container-g3'];
+        const selectIds = ['select-g1', 'select-g2', 'select-g3'];
+        const canvasIds = ['chart1', 'chart2', 'chart3'];
+        const currentColor = '#e74c3c';
+        const historyColor = 'rgba(189, 195, 199, 0.6)';
+        const charts = [];
+        const numberFormatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+
+        function createChartConfig(label) {
+            return {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: 'nearest', intersect: false, axis: 'x' },
+                    layout: { padding: 5 },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: 't (s)', color: '#000', font: { weight: 'bold' } },
+                            min: 0,
+                            border: { display: true, width: 2, color: 'black' },
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 5, color: '#000', font: { weight: 'bold' } }
+                        },
+                        y: {
+                            title: { display: true, text: label, color: '#000', font: { weight: 'bold' } },
+                            border: { display: true, width: 2, color: 'black' },
+                            grid: { color: (ctx) => ctx.tick.value === 0 ? '#000' : '#f0f0f0', lineWidth: (ctx) => ctx.tick.value === 0 ? 2 : 1 },
+                            ticks: {
+                                maxTicksLimit: 5,
+                                color: '#000',
+                                font: { weight: 'bold' },
+                                callback: val => numberFormatter.format(val)
+                            }
+                        }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { mode: 'nearest', intersect: false } }
+                }
+            };
+        }
+
+        selectIds.forEach((id, index) => {
+            const ctxChart = document.getElementById(canvasIds[index]).getContext('2d');
+            const selectEl = document.getElementById(id);
+            const initialLabel = selectEl.options[selectEl.selectedIndex].text;
+            const config = createChartConfig(initialLabel);
+            config.data.datasets.push({
+                label: 'Actuel',
+                data: [],
+                borderColor: currentColor,
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.1
+            });
+            charts.push(new Chart(ctxChart, config));
+        });
+
+        function highlightOnCharts(t) {
+            charts.forEach(chart => {
+                const datasetIndex = chart.data.datasets.length - 1;
+                const data = chart.data.datasets[datasetIndex].data;
+                let closestIdx = -1; let minDiff = Infinity;
+                for(let i=0; i<data.length; i++){
+                    const diff = Math.abs(data[i].x - t);
+                    if(diff < minDiff){ minDiff = diff; closestIdx = i; }
+                }
+                if(closestIdx !== -1) {
+                    chart.setActiveElements([{datasetIndex, index: closestIdx}]);
+                    chart.tooltip.setActiveElements([{datasetIndex, index: closestIdx}]);
+                    chart.update();
+                }
+            });
+        }
+        function clearChartHighlights() {
+            charts.forEach(chart => {
+                chart.setActiveElements([]);
+                chart.tooltip.setActiveElements([]);
+                chart.update();
+            });
+        }
+
+        // --- BORNES GLOBALES ---
+        function updateGlobalBounds() {
+            let points = state.computedPoints;
+            if (points.length === 0) points = computeFullTrajectory();
+
+            let xMax = 0, zMax = 0, tMax = 0, vMax = 0, EMax = 0;
+            points.forEach(p => {
+                xMax = Math.max(xMax, p.x);
+                zMax = Math.max(zMax, p.z);
+                tMax = Math.max(tMax, p.t);
+                vMax = Math.max(vMax, p.v);
+                EMax = Math.max(EMax, p.Em);
+            });
+            state.history.forEach(h => {
+                xMax = Math.max(xMax, h.bounds.xMax);
+                zMax = Math.max(zMax, h.bounds.zMax);
+                tMax = Math.max(tMax, h.bounds.tMax);
+                vMax = Math.max(vMax, h.bounds.vMax);
+                EMax = Math.max(EMax, h.bounds.EMax);
+            });
+
+            if(xMax < 1) xMax = 1;
+            if(zMax < 1) zMax = 1;
+
+            state.globalBounds = { xMax, zMax, tMax, vMax, EMax };
+            state.t_max_current = points[points.length-1].t;
+        }
+
+        function updateScales() {
+            if (simCanvas.width <= 0 || simCanvas.height <= 0) return;
+
+            const margin = 0.85;
+            const availableWidth = simCanvas.width * margin;
+            const availableHeight = simCanvas.height * margin;
+            const idealScaleX = availableWidth / state.globalBounds.xMax;
+            const idealScaleZ = availableHeight / state.globalBounds.zMax;
+
+            if (document.getElementById('ortho-mode').checked) {
+                const common = Math.min(idealScaleX, idealScaleZ);
+                scaleX = common;
+                scaleZ = common;
+            } else {
+                scaleX = idealScaleX;
+                scaleZ = idealScaleZ;
+            }
+
+            charts.forEach((chart, index) => {
+                const selectEl = document.getElementById(selectIds[index]);
+                const variable = selectEl.value;
+                const label = selectEl.options[selectEl.selectedIndex].text;
+                chart.options.scales.x.max = parseFloat((state.globalBounds.tMax * 1.05).toFixed(2));
+                chart.options.scales.y.title.text = label;
+
+                let maxVal = 0, minVal = 0;
+                switch(variable) {
+                    case 'x': maxVal = state.globalBounds.xMax; break;
+                    case 'z': maxVal = state.globalBounds.zMax * 1.2; break;
+                    case 'vx': maxVal = state.globalBounds.vMax * 1.2; break;
+                    case 'vz': maxVal = state.globalBounds.vMax; minVal = -state.globalBounds.vMax; break;
+                    case 'v': maxVal = state.globalBounds.vMax; break;
+                    case 'ax': maxVal = 20; minVal = -20; break;
+                    case 'az': maxVal = 0; minVal = -20; break;
+                    case 'a':  maxVal = 25; break;
+                    case 'Ec':
+                    case 'Ep':
+                    case 'Em': maxVal = state.globalBounds.EMax * 1.1; break;
+                }
+                const range = maxVal - minVal;
+                if(range < 0.1) {
+                    chart.options.scales.y.min = minVal - 5;
+                    chart.options.scales.y.max = maxVal + 5;
+                } else {
+                    chart.options.scales.y.min = minVal - (range * 0.05);
+                    chart.options.scales.y.max = maxVal + (range * 0.05);
+                }
+                chart.update();
+            });
+        }
+
+        // --- MISE À JOUR STATIQUE ---
+        window.forceUpdate = function() {
+            if(!state.running) {
+                let v0 = parseFloat(document.getElementById('v0').value); if(isNaN(v0)) v0 = 50; state.v0 = v0;
+                let h0 = parseFloat(document.getElementById('h0').value); if(isNaN(h0)) h0 = 0; state.h0 = h0;
+                let angle = parseFloat(document.getElementById('angle').value); if(isNaN(angle)) angle = 45; state.angleRad = angle * Math.PI / 180;
+                let m = parseFloat(document.getElementById('mass').value); if(isNaN(m) || m<=0) m = 1.0; state.mass = m;
+
+                state.computedPoints = computeFullTrajectory();
+                updateGlobalBounds();
+                updateScales();
+                for(let i=0;i<3;i++) resetGraph(i);
+                drawFrame();
+            }
+        };
+
+        window.switchFrictionModel = function() {
+            const model = document.querySelector('input[name="frict-model"]:checked').value;
+            const slider = document.getElementById('k-slider');
+            if(model === 'quad') {
+                slider.min = "0.0001"; slider.max = "0.01"; slider.step = "0.0001";
+                if(parseFloat(slider.value) > 0.01) slider.value = "0.001";
+            } else {
+                slider.min = "0.01"; slider.max = "2.0"; slider.step = "0.01";
+                if(parseFloat(slider.value) < 0.01) slider.value = "0.1";
+            }
+            updateKDisplay();
+            forceUpdate();
+        };
+
+        const frictionCheck = document.getElementById('friction-check');
+        const frictionWrapper = document.getElementById('friction-slider-wrapper');
+        const modelSelector = document.getElementById('model-selector');
+
+        frictionCheck.addEventListener('change', (e) => {
+            const isActive = e.target.checked;
+            frictionWrapper.style.opacity = isActive ? '1' : '0.5';
+            frictionWrapper.style.pointerEvents = isActive ? 'auto' : 'none';
+            modelSelector.style.opacity = isActive ? '1' : '0.5';
+            modelSelector.style.pointerEvents = isActive ? 'auto' : 'none';
+        });
+
+        document.getElementById('g-slider').addEventListener('input', (e) => {
+            state.g = parseFloat(e.target.value);
+            document.getElementById('g-val').innerText = state.g.toFixed(1);
+            if(!state.running) forceUpdate();
+        });
+
+        window.updateKDisplay = function() {
+             const val = parseFloat(document.getElementById('k-slider').value);
+             document.getElementById('k-val').innerText = val.toFixed(4);
+        };
+
+        // --- BOUTONS ---
+        document.getElementById('btn-start').addEventListener('click', () => {
+            if (state.running && !state.paused) return;
+            if (state.lastShotData) {
+                commitHistory(state.lastShotData);
+                state.lastShotData = null;
+            }
+            state.running = true; state.paused = false;
+            document.getElementById('btn-stop').innerText = "Pause"; document.getElementById('btn-stop').classList.remove('resume');
+            state.v0 = parseFloat(document.getElementById('v0').value) || 50;
+            state.computedPoints = computeFullTrajectory();
+            state.t = 0; state.hoverPhys = null;
+            updateGlobalBounds(); updateScales(); resizeSimulationCanvas();
+            charts.forEach(c => {
+                const last = c.data.datasets.length - 1;
+                c.data.datasets[last].data = [];
+            });
+            loop();
+        });
+
+        document.getElementById('btn-stop').addEventListener('click', () => {
+            if (!state.running && state.t === 0) return;
+            if (state.paused) {
+                state.paused = false; state.running = true;
+                document.getElementById('btn-stop').innerText = "Pause"; document.getElementById('btn-stop').classList.remove('resume');
+                loop();
+            } else {
+                state.running = false; state.paused = true;
+                document.getElementById('btn-stop').innerText = "Reprendre"; document.getElementById('btn-stop').classList.add('resume');
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            state.running = false; cancelAnimationFrame(animationId);
+            state.t = 0; state.computedPoints = []; state.history = []; state.lastShotData = null; state.hoverPhys = null;
+            state.globalBounds = { xMax: 10, zMax: 10, tMax: 1, vMax: 50, EMax: 10 };
+            document.getElementById('time-display').innerText = "0.00";
+            charts.forEach(c => {
+                c.data.datasets = [{
+                    label: 'Actuel',
+                    data: [],
+                    borderColor: currentColor,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.1
+                }];
+                c.update();
+            });
+            forceUpdate();
+        });
+
+        // --- HISTORIQUE ---
+        function commitHistory(shotData) {
+            const storedData = [];
+            const step = Math.max(1, Math.floor(shotData.points.length / 100));
+            for(let i=0; i<shotData.points.length; i+=step) {
+                const p = shotData.points[i];
+                storedData.push({ t: p.t, vals: p });
+            }
+            const lastP = shotData.points[shotData.points.length-1];
+            storedData.push({ t: lastP.t, vals: lastP });
+
+            state.history.push({
+                traj: [...shotData.points],
+                graphData: storedData,
+                bounds: shotData.bounds
+            });
+
+            charts.forEach((chart, index) => {
+                const selectEl = document.getElementById(selectIds[index]);
+                const variable = selectEl.value;
+                const dataPoints = storedData.map(d => ({ x: d.t, y: d.vals[variable] }));
+                const newDs = {
+                    label: 'Hist',
+                    data: dataPoints,
+                    borderColor: historyColor,
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    tension: 0.1
+                };
+                const currentDs = chart.data.datasets.pop();
+                chart.data.datasets.push(newDs);
+                chart.data.datasets.push(currentDs);
+                chart.update();
+            });
+        }
+
+        // --- BOUCLE D'ANIMATION ---
+        function loop() {
+            if (!state.running) return;
+            const dtReal = 0.016;
+            const dtSim = dtReal * state.speedMultiplier;
+            state.t += dtSim;
+
+            if (state.t >= state.t_max_current) {
+                state.t = state.t_max_current;
+                state.running = false;
+                state.lastShotData = {
+                    points: [...state.computedPoints],
+                    bounds: {
+                        xMax: state.globalBounds.xMax,
+                        zMax: state.globalBounds.zMax,
+                        tMax: state.t_max_current,
+                        vMax: state.v0,
+                        EMax: state.globalBounds.EMax
+                    }
+                };
+                drawFrame();
+                updateGraphPoints();
+                document.getElementById('btn-stop').innerText = "Pause";
+                return;
+            }
+            drawFrame();
+            updateGraphPoints();
+            document.getElementById('time-display').innerText = state.t.toFixed(2);
+            animationId = requestAnimationFrame(loop);
+        }
+
+        function updateGraphPoints() {
+            let p = state.computedPoints.find(pt => pt.t >= state.t);
+            if(!p) p = state.computedPoints[state.computedPoints.length-1];
+
+            charts.forEach((chart, index) => {
+                const selectEl = document.getElementById(selectIds[index]);
+                const variable = selectEl.value;
+                const lastIdx = chart.data.datasets.length - 1;
+                const currentData = chart.data.datasets[lastIdx].data;
+                if(currentData.length === 0 || p.t > currentData[currentData.length-1].x) {
+                     currentData.push({ x: p.t, y: p[variable] });
+                     chart.update('none');
+                }
+            });
+        }
+
+        // --- DESSIN SCENE ---
+        function drawFrame() {
+            if (simCanvas.width <= 0 || simCanvas.height <= 0) return;
+            ctx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+            drawGridAndAxes();
+
+            // Historique
+            state.history.forEach(h => {
+                ctx.beginPath(); ctx.strokeStyle = historyColor; ctx.lineWidth = 2;
+                if(h.traj.length > 0) {
+                    ctx.moveTo(origin.x + h.traj[0].x * scaleX, origin.y - h.traj[0].z * scaleZ);
+                    for(let i=1; i<h.traj.length; i+=5) {
+                        ctx.lineTo(origin.x + h.traj[i].x * scaleX, origin.y - h.traj[i].z * scaleZ);
+                    }
+                    const last = h.traj[h.traj.length-1];
+                    ctx.lineTo(origin.x + last.x * scaleX, origin.y - last.z * scaleZ);
+                }
+                ctx.stroke();
+            });
+
+            // Dernier tir fini
+            if (!state.running && state.lastShotData) {
+                const traj = state.lastShotData.points;
+                ctx.beginPath(); ctx.strokeStyle = historyColor; ctx.lineWidth = 2;
+                ctx.moveTo(origin.x + traj[0].x * scaleX, origin.y - traj[0].z * scaleZ);
+                for(let i=1; i<traj.length; i+=2) {
+                    ctx.lineTo(origin.x + traj[i].x * scaleX, origin.y - traj[i].z * scaleZ);
+                }
+                ctx.stroke();
+            }
+
+            // Trajectoire active
+            if (state.running && state.computedPoints.length > 0) {
+                ctx.beginPath(); ctx.strokeStyle = '#3498db'; ctx.lineWidth = 3;
+                const startP = state.computedPoints[0];
+                ctx.moveTo(origin.x + startP.x * scaleX, origin.y - startP.z * scaleZ);
+                for(let i=1; i<state.computedPoints.length; i++) {
+                    const p = state.computedPoints[i];
+                    if (p.t > state.t) break;
+                    ctx.lineTo(origin.x + p.x * scaleX, origin.y - p.z * scaleZ);
+                }
+                ctx.stroke();
+            }
+
+            // Bille
+            let physToDraw = state.hoverPhys;
+            if (!physToDraw) {
+                if (state.running || state.paused) {
+                    physToDraw = state.computedPoints.find(pt => pt.t >= state.t) || state.computedPoints[state.computedPoints.length-1];
+                } else if (state.lastShotData) {
+                    const pts = state.lastShotData.points;
+                    physToDraw = pts[pts.length-1];
+                } else if (state.computedPoints.length > 0) {
+                    physToDraw = state.computedPoints[0];
+                } else if (state.h0 > 0) {
+                    physToDraw = { x: 0, z: state.h0, vx:0, vz:0, ax:0, az:0 };
+                }
+            }
+
+            if (physToDraw) {
+                const bx = origin.x + physToDraw.x * scaleX;
+                const bz = origin.y - physToDraw.z * scaleZ;
+                const isGhost = (physToDraw === state.hoverPhys);
+                ctx.beginPath(); ctx.fillStyle = isGhost ? '#95a5a6' : '#e74c3c';
+                ctx.arc(bx, bz, 8, 0, 2*Math.PI); ctx.fill();
+                if(isGhost) {
+                    ctx.beginPath(); ctx.strokeStyle = '#2c3e50'; ctx.lineWidth=1;
+                    ctx.arc(bx, bz, 12, 0, 2*Math.PI); ctx.stroke();
+                }
+
+                const showV = document.getElementById('show-v').checked;
+                const showA = document.getElementById('show-a').checked;
+                if ((state.t > 0 || isGhost || state.t===0 || state.lastShotData) && physToDraw) {
+                    if (isGhost || showV || showA) {
+                        const pixelLengthV = 80; const pixelLengthA = 60;
+                        const doDrawV = isGhost ? true : showV;
+                        const doDrawA = isGhost ? true : showA;
+                        if (doDrawV) {
+                            const vx_px = physToDraw.vx * scaleX;
+                            const vz_px_screen = -physToDraw.vz * scaleZ;
+                            const norm_px = Math.sqrt(vx_px*vx_px + vz_px_screen*vz_px_screen);
+                            const k = (norm_px > 0) ? (pixelLengthV / norm_px) : 0;
+                            drawArrow(ctx, bx, bz, bx + vx_px * k, bz + vz_px_screen * k, '#27ae60', 3);
+                            ctx.fillStyle = '#27ae60'; ctx.font='bold 14px Arial';
+                            ctx.fillText('v', bx+15, bz-15);
+                        }
+                        if (doDrawA) {
+                            const ax_px = physToDraw.ax * scaleX;
+                            const az_px_screen = -physToDraw.az * scaleZ;
+                            const normA_px = Math.sqrt(ax_px*ax_px + az_px_screen*az_px_screen);
+                            const kA = (normA_px > 0) ? (pixelLengthA / normA_px) : 0;
+                            drawArrow(ctx, bx, bz, bx + ax_px * kA, bz + az_px_screen * kA, '#8e44ad', 3);
+                            ctx.fillStyle = '#8e44ad'; ctx.font='bold 14px Arial';
+                            ctx.fillText('a', bx+15, bz+25);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawGridAndAxes() {
+            if (scaleX === 0 || scaleZ === 0) return;
+            drawArrow(ctx, 0, origin.y, simCanvas.width - 10, origin.y, '#000', 2);
+            drawArrow(ctx, origin.x, simCanvas.height, origin.x, 10, '#000', 2);
+            ctx.fillStyle = '#000'; ctx.font = 'bold 16px Arial';
+            ctx.fillText('x (m)', simCanvas.width - 40, origin.y - 12);
+            ctx.fillText('z (m)', origin.x + 12, 25);
+            ctx.fillText('O', origin.x - 20, origin.y + 20);
+
+            const widthMeters = simCanvas.width / scaleX;
+            if (!isFinite(widthMeters)) return;
+
+            const stepX = niceStep(widthMeters, 20);
+            ctx.lineWidth = 1; ctx.strokeStyle = '#999'; ctx.font = '12px Arial';
+            for (let x = 0; x * scaleX <= simCanvas.width; x += stepX) {
+                const px = origin.x + x * scaleX;
+                ctx.beginPath(); ctx.moveTo(px, origin.y-4); ctx.lineTo(px, origin.y+4); ctx.stroke();
+                if(x>0.01) ctx.fillText(Number.isInteger(x)?x:x.toFixed(1), px-5, origin.y+18);
+            }
+            const heightMeters = simCanvas.height / scaleZ;
+            const stepZ = niceStep(heightMeters, 20);
+            for (let z = 0; z * scaleZ <= simCanvas.height; z += stepZ) {
+                const pz = origin.y - z * scaleZ;
+                ctx.beginPath(); ctx.moveTo(origin.x-4, pz); ctx.lineTo(origin.x+4, pz); ctx.stroke();
+                if(z>0.01) ctx.fillText(Number.isInteger(z)?z:z.toFixed(1), origin.x-28, pz+4);
+            }
+        }
+        function drawArrow(ctx, x0, y0, x1, y1, color, width) {
+            ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+            const angle = Math.atan2(y1 - y0, x1 - x0); const head = 10;
+            ctx.beginPath(); ctx.moveTo(x1, y1);
+            ctx.lineTo(x1 - head * Math.cos(angle - Math.PI/6), y1 - head * Math.sin(angle - Math.PI/6));
+            ctx.lineTo(x1 - head * Math.cos(angle + Math.PI/6), y1 - head * Math.sin(angle + Math.PI/6));
+            ctx.lineTo(x1, y1); ctx.fill(); ctx.restore();
+        }
+        function niceStep(range, maxTicks) {
+            if (range <= 0 || !isFinite(range)) return 1;
+            const raw = range / maxTicks;
+            const mag = Math.floor(Math.log10(raw));
+            const base = Math.pow(10, mag);
+            const norm = raw / base;
+            let step;
+            if (norm < 1.5) step = 1;
+            else if (norm < 3.5) step = 2;
+            else if (norm < 7.5) step = 5;
+            else step = 10;
+            return step * base;
+        }
+
+        // --- AFFICHAGE / MASQUAGE DES GRAPHES ---
+        window.toggleGraph = function(index) {
+            const isChecked = document.getElementById('check-g' + (index+1)).checked;
+            const container = document.getElementById(containerIds[index]);
+            if(isChecked) container.classList.remove('hidden');
+            else container.classList.add('hidden');
+            setTimeout(() => { charts.forEach(c => c.resize()); }, 100);
+        };
+
+        // --- RESET GRAPHE LORS DU CHANGEMENT DE VARIABLE ---
+        window.resetGraph = function(index) {
+            const chart = charts[index];
+            const selectEl = document.getElementById(selectIds[index]);
+            const variable = selectEl.value;
+            const label = selectEl.options[selectEl.selectedIndex].text;
+
+            chart.options.scales.y.title.text = label;
+            updateScales();
+
+            // Historique
+            for(let i=0; i<state.history.length; i++) {
+                const hist = state.history[i];
+                const histData = hist.graphData.map(d => ({ x: d.t, y: d.vals[variable] }));
+                if (chart.data.datasets[i]) {
+                    chart.data.datasets[i].data = histData;
+                }
+            }
+
+            // Courbe actuelle
+            const lastIdx = chart.data.datasets.length - 1;
+            const currentData = [];
+            const pts = state.computedPoints;
+
+            if(pts.length > 0 && state.t > 0) {
+                const tLimit = Math.min(state.t, state.t_max_current || state.t);
+                const step = Math.max(1, Math.floor(pts.length / 200));
+                for(let i=0; i<pts.length; i+=step) {
+                    const p = pts[i];
+                    if(p.t > tLimit) break;
+                    currentData.push({ x: p.t, y: p[variable] });
+                }
+                const lastP = pts[pts.length-1];
+                if(lastP.t <= tLimit && (currentData.length === 0 || currentData[currentData.length-1].x < lastP.t)) {
+                    currentData.push({ x: lastP.t, y: lastP[variable] });
+                }
+            }
+
+            chart.data.datasets[lastIdx].data = currentData;
+            chart.update();
+        };
+
+        // --- EXPORT CSV ---
+        function buildExportPoints(variable) {
+            if (!state.computedPoints || state.computedPoints.length === 0) return [];
+            return state.computedPoints.map(p => ({ t: p.t, y: p[variable] }));
+        }
+
+        window.openCsvModal = function(graphIndex) {
+            const selectEl = document.getElementById(selectIds[graphIndex]);
+            const variable = selectEl.value;
+            const label = selectEl.options[selectEl.selectedIndex].text;
+
+            const pts = buildExportPoints(variable);
+            if (pts.length === 0) {
+                alert("Aucune trajectoire à exporter (lancer d'abord un tir).");
+                return;
+            }
+
+            csvCurrentPoints = pts;
+            csvCurrentVariable = variable;
+            csvCurrentLabel = label;
+
+            const countSlider = document.getElementById('csv-count');
+            const countVal = document.getElementById('csv-count-value');
+            const varSpan = document.getElementById('csv-modal-var');
+            const fileInput = document.getElementById('csv-filename');
+
+            const maxCount = pts.length;
+            const minCount = Math.min(10, maxCount);
+            countSlider.min = Math.max(2, minCount);
+            countSlider.max = maxCount;
+            countSlider.value = maxCount;
+            countVal.textContent = maxCount;
+
+            varSpan.textContent = label;
+            const safeBase = label.replace(/[^\w\-]/g, '_');
+            fileInput.value = safeBase + ".csv";
+
+            document.getElementById('csv-modal').classList.remove('hidden');
+        };
+
+        window.closeCsvModal = function() {
+            document.getElementById('csv-modal').classList.add('hidden');
+        };
+
+        function samplePoints(points, n) {
+            if (n >= points.length) return points.slice();
+            const res = [];
+            const step = (points.length - 1) / (n - 1);
+            for (let i = 0; i < n; i++) {
+                const idx = Math.round(i * step);
+                res.push(points[Math.min(idx, points.length - 1)]);
+            }
+            return res;
+        }
+
+        window.confirmCsvExport = function() {
+            if (!csvCurrentPoints || csvCurrentPoints.length === 0) {
+                closeCsvModal();
+                return;
+            }
+            const countSlider = document.getElementById('csv-count');
+            const n = parseInt(countSlider.value);
+            const fileInput = document.getElementById('csv-filename');
+            let filename = fileInput.value.trim();
+            if (!filename) filename = csvCurrentLabel.replace(/[^\w\-]/g, '_') + ".csv";
+            if (!filename.toLowerCase().endsWith(".csv")) filename += ".csv";
+
+            const pts = samplePoints(csvCurrentPoints, n);
+
+            let csv = "t (s);" + csvCurrentLabel + "\n";
+            pts.forEach(p => {
+                csv += p.t.toString().replace('.', ',') + ";" + p.y.toString().replace('.', ',') + "\n";
+            });
+
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            closeCsvModal();
+        };
+
+        // --- INIT ---
+        window.onload = function() {
+            document.getElementById('v0').value = "50";
+            document.getElementById('h0').value = "0";
+            document.getElementById('angle').value = "45";
+            document.getElementById('mass').value = "1.0";
+            document.getElementById('friction-check').checked = false;
+            document.getElementById('k-slider').value = "0.001";
+            document.getElementById('g-slider').value = "9.8";
+            document.getElementById('g-val').innerText = "9.8";
+            document.getElementById('k-val').innerText = "0.001";
+
+            const csvSlider = document.getElementById('csv-count');
+            const csvVal = document.getElementById('csv-count-value');
+            csvSlider.addEventListener('input', function() {
+                csvVal.textContent = this.value;
+            });
+
+            setTimeout(() => {
+                resizeSimulationCanvas();
+                forceUpdate();
+            }, 50);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doppler V45 : Finale Signée</title>
+    <style>
+        /* THÈME CLAIR / SALLE DE CLASSE */
+        :root { 
+            --bg:#e0e0e0; 
+            --panel:#ffffff; 
+            --text:#222; 
+            --acc:#00aa00; 
+            --src:#d60040; 
+            --rec:#0055d4; 
+            --shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        body { font-family: 'Segoe UI', sans-serif; background:var(--bg); color:var(--text); margin:0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+        
+        #layout { display:flex; height:100%; }
+        #sidebar { width:320px; background:var(--panel); border-right:1px solid #ccc; display:flex; flex-direction:column; z-index:10; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
+        .controls { padding:20px; flex:1; overflow-y:auto; }
+        
+        .card { background:#f9f9f9; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #ddd; box-shadow:var(--shadow); transition: all 0.3s ease; }
+        h3 { margin:0 0 10px 0; font-size:0.85rem; color:#555; text-transform:uppercase; border-bottom:2px solid #eee; padding-bottom:5px; font-weight:800; }
+        
+        label { display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:5px; font-weight:600; }
+        input[type=range] { width:100%; margin-bottom:10px; cursor:pointer; }
+        .val { font-family:'Consolas', monospace; color:#000; background:#eee; padding:2px 6px; border-radius:4px; }
+
+        .demo-panel { background:#fff3cd; border:1px solid #ffeeba; padding:15px; border-radius:8px; margin-bottom:15px; }
+        .demo-toggle { display:flex; align-items:center; cursor:pointer; margin-bottom:10px; }
+        .demo-toggle input { margin-right:10px; transform:scale(1.5); }
+        .demo-lbl { font-weight:bold; color:#856404; font-size:1rem; }
+        
+        .loop-opt { display:flex; align-items:center; margin-bottom:15px; font-size:0.9rem; color:#555; margin-left:5px; font-weight:bold;}
+        .loop-opt input { margin-right:8px; width:auto; margin-bottom:0; cursor:pointer; transform:scale(1.2); }
+
+        #btn-anim-demo {
+            width:100%; padding:12px; background:#ffc107; color:#000; border:none; border-radius:4px; font-weight:bold; 
+            cursor:pointer; font-size:0.95rem; transition:0.2s; border:1px solid #d39e00;
+        }
+        #btn-anim-demo:hover { background:#ffca2c; }
+        #btn-anim-demo:disabled { opacity:0.6; cursor:not-allowed; background:#e0e0e0; border-color:#ccc; color:#888; }
+
+        .switch-box { display:flex; background:#eee; padding:4px; border-radius:6px; border:1px solid #ccc; margin-top:10px; }
+        .switch-opt { flex:1; text-align:center; padding:8px; font-size:0.8rem; cursor:pointer; color:#666; font-weight:bold; border-radius:4px; transition:0.2s; }
+        .switch-opt.active { background:#fff; color:#000; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+
+        /* BOUTON AUDIO ON/OFF */
+        #btn-audio-power {
+            width:100%; padding:8px; margin-bottom:15px; border-radius:4px; border:none;
+            font-weight:bold; cursor:pointer; font-size:0.9rem;
+            transition: background 0.2s;
+        }
+
+        #viewport { flex:1; position:relative; display:flex; flex-direction:column; background:#f0f0f0; }
+        #canvas-wrap { flex:1; position:relative; overflow:hidden; }
+        canvas { display:block; width:100%; height:100%; }
+
+        /* SIGNATURE DISCRÈTE */
+        .signature {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 0.75rem;
+            color: #999;
+            pointer-events: none;
+            z-index: 1000;
+            font-style: italic;
+            background: rgba(255,255,255,0.6);
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        /* CIBLAGE POUR MASQUAGE */
+        .hidden-in-demo { display:block; }
+        body.demo-active .hidden-in-demo { display:none !important; }
+
+        #scopes { height:220px; background:#fff; border-top:1px solid #ccc; display:flex; transition: height 0.3s; }
+        body.demo-active #scopes { height:0; border:none; overflow:hidden; }
+        
+        .scope { flex:1; border-right:1px solid #eee; display:flex; flex-direction:column; }
+        .scope-head { padding:8px 15px; background:#f9f9f9; border-bottom:1px solid #eee; display:flex; justify-content:space-between; font-size:0.85rem; font-family:'Consolas', monospace; color:#555; font-weight:bold; }
+        canvas.scope-cvs { flex:1; width:100%; background:#fff; }
+    </style>
+</head>
+<body>
+
+<div id="layout">
+    <div id="sidebar">
+        <div class="controls">
+            <!-- Mode Démonstration -->
+            <div class="demo-panel">
+                <div class="demo-toggle" onclick="toggleDemoMode()">
+                    <input type="checkbox" id="chk-demo">
+                    <span class="demo-lbl">MODE DÉMONSTRATION</span>
+                </div>
+                
+                <div id="demo-opts" style="display:none;">
+                    <label style="color:#856404; margin-bottom:2px;">Vitesse Animation <span class="val" id="disp-speed">100%</span></label>
+                    <input type="range" id="sl-speed" min="0" max="1" step="0.01" value="1" style="margin-bottom:15px;">
+
+                    <div class="loop-opt">
+                        <input type="checkbox" id="chk-loop">
+                        <label for="chk-loop">Enchaîner (Boucle)</label>
+                    </div>
+                    <button id="btn-anim-demo" onclick="startDemoAnim()">LANCER ANIMATION Te</button>
+                </div>
+            </div>
+
+            <div class="card" style="border-left:5px solid var(--src)">
+                <h3><span style="color:var(--src)">SOURCE</span></h3>
+                <label>Fréquence <span class="val" id="disp-freq">440 Hz</span></label>
+                <input type="range" id="sl-freq" min="200" max="600" value="440" step="5">
+                <label>Vitesse <span class="val" id="disp-vs">0 m/s</span></label>
+                <input type="range" id="sl-vs" min="-250" max="250" value="0" step="5">
+            </div>
+
+            <div class="card" style="border-left:5px solid var(--rec)">
+                <h3><span style="color:var(--rec)">RÉCEPTEUR</span></h3>
+                <label>Vitesse <span class="val" id="disp-vr">0 m/s</span></label>
+                <input type="range" id="sl-vr" min="-250" max="250" value="0" step="5">
+            </div>
+
+            <div class="card hidden-in-demo">
+                <h3>AUDIO</h3>
+                <!-- BOUTON ON/OFF -->
+                <button id="btn-audio-power" onclick="toggleAudioPower()">AUDIO : OFF</button>
+                
+                <label>Volume <span class="val" id="disp-vol">10%</span></label>
+                <input type="range" id="sl-vol" min="0" max="0.5" value="0.1" step="0.01">
+                
+                <div class="switch-box">
+                    <div class="switch-opt active" id="btn-src" onclick="setAudioTarget('src')">SOURCE (Pur)</div>
+                    <div class="switch-opt" id="btn-rec" onclick="setAudioTarget('rec')">RÉCEPTEUR (Doppler)</div>
+                </div>
+            </div>
+            
+            <button onclick="resetAll()" style="width:100%; padding:15px; background:#444; color:#fff; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">RÉINITIALISER TOUT</button>
+        </div>
+    </div>
+
+    <div id="viewport">
+        <div id="canvas-wrap">
+            <canvas id="cvs-main"></canvas>
+            <div class="signature">Espinosa T. Lycée Albert Einstein</div>
+        </div>
+        
+        <div id="scopes">
+            <div class="scope">
+                <div class="scope-head"><span>OSCILLO SOURCE</span><span style="color:var(--src)" id="val-fs">440 Hz</span></div>
+                <canvas id="scope-s" class="scope-cvs"></canvas>
+            </div>
+            <div class="scope">
+                <div class="scope-head"><span>OSCILLO REÇU</span><span style="color:var(--rec)" id="val-fr">--- Hz</span></div>
+                <canvas id="scope-r" class="scope-cvs"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const C_PHYS = 340;   
+const C_VISUAL = 210; 
+const METER_SCALE = C_VISUAL / C_PHYS;
+
+const app = {
+    isDemo: false,
+    isDemoRunning: false,
+    t: 0,
+    lastTime: 0,
+    demoSpeedFactor: 1.0, // Facteur de ralentissement (0.0 à 1.0)
+    
+    // Démo
+    demoTime: 0,
+    demoStartX: 0,
+    demoGhosts: [], 
+    movingLambdas: [], 
+    
+    src: { x:0, vx:0, f:440, phase:0 },
+    rec: { x:0, vx:0, f_percue:0, targetF:0, hasSignal:false },
+    
+    history: [], 
+    waves: [],
+    demoWaves: [],
+    
+    vol: 0.1,
+    audioTarget: 'src',
+    audioOn: false // OFF PAR DÉFAUT
+};
+
+const cvsMain = document.getElementById('cvs-main');
+const ctxMain = cvsMain.getContext('2d');
+const cvsS = document.getElementById('scope-s');
+const ctxS = cvsS.getContext('2d');
+const cvsR = document.getElementById('scope-r');
+const ctxR = cvsR.getContext('2d');
+
+let audioCtx = null;
+let nodes = null;
+
+function init() {
+    resize();
+    window.addEventListener('resize', resize);
+    bind('sl-freq', 'disp-freq', v => app.src.f = v, ' Hz');
+    bind('sl-vs', 'disp-vs', v => app.src.vx = v, ' m/s');
+    bind('sl-vr', 'disp-vr', v => app.rec.vx = v, ' m/s');
+    bind('sl-vol', 'disp-vol', v => app.vol = v, '%', 100);
+    
+    // BIND CURSEUR VITESSE DEMO
+    const slSpeed = document.getElementById('sl-speed');
+    slSpeed.addEventListener('input', (e) => {
+        app.demoSpeedFactor = parseFloat(e.target.value);
+        document.getElementById('disp-speed').innerText = Math.round(app.demoSpeedFactor * 100) + "%";
+    });
+
+    updateAudioBtnUI();
+    
+    resetAll();
+    document.body.addEventListener('click', () => {
+        if(app.audioOn && !audioCtx) initAudio();
+        if(app.audioOn && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }, { once:true });
+    app.lastTime = performance.now();
+    loop();
+}
+
+function bind(idIn, idOut, setter, suffix, mul=1) {
+    const el = document.getElementById(idIn);
+    const disp = document.getElementById(idOut);
+    const update = () => {
+        const v = parseFloat(el.value);
+        setter(v);
+        disp.innerText = Math.round(v*mul) + suffix;
+    };
+    el.addEventListener('input', update);
+    update();
+}
+
+function toggleAudioPower() {
+    app.audioOn = !app.audioOn;
+    updateAudioBtnUI();
+    // Activer le contexte audio si c'est la première fois qu'on allume
+    if(app.audioOn) {
+        if(!audioCtx) initAudio();
+        else if(audioCtx.state === 'suspended') audioCtx.resume();
+    }
+}
+
+function updateAudioBtnUI() {
+    const btn = document.getElementById('btn-audio-power');
+    if(app.audioOn) {
+        btn.innerText = "AUDIO : ON";
+        btn.style.background = "#28a745"; // Vert
+        btn.style.color = "#fff";
+    } else {
+        btn.innerText = "AUDIO : OFF";
+        btn.style.background = "#dc3545"; // Rouge
+        btn.style.color = "#fff";
+    }
+}
+
+function toggleDemoMode() {
+    const chk = document.getElementById('chk-demo');
+    if(event.target.type !== 'checkbox') chk.checked = !chk.checked;
+    app.isDemo = chk.checked;
+    app.isDemoRunning = false;
+    document.getElementById('demo-opts').style.display = app.isDemo ? 'block' : 'none';
+    
+    // GESTION DU MASQUAGE (Classe CSS sur le body pour tout gérer proprement)
+    if(app.isDemo) {
+        document.body.classList.add('demo-active');
+        // Reset données Démo
+        app.demoGhosts = [];
+        app.demoWaves = [];
+        app.movingLambdas = [];
+        app.rec.hasSignal = false;
+        app.rec.f_percue = 0;
+        app.rec.targetF = 0;
+    } else {
+        document.body.classList.remove('demo-active');
+        resetAll(); // Reset simu normale
+    }
+    
+    // Forcer un resize pour que le canvas prenne toute la place
+    setTimeout(resize, 350); // Petit délai pour laisser la transition CSS finir
+}
+
+function startDemoAnim() {
+    if(!app.isDemo) return;
+    app.demoGhosts = [];
+    app.demoWaves = [];
+    app.movingLambdas = [];
+    app.rec.hasSignal = false; 
+    app.rec.f_percue = 0;
+    app.rec.targetF = 0;
+    
+    app.demoTime = 0;
+    app.demoStartX = app.src.x;
+    app.isDemoRunning = true;
+    document.getElementById('btn-anim-demo').innerText = "ANIMATION EN COURS...";
+    document.getElementById('btn-anim-demo').disabled = true;
+}
+
+function resetAll() {
+    const w = cvsMain.width;
+    app.src.x = w * 0.25;
+    app.rec.x = w * 0.75;
+    app.t = 0;
+    app.history = []; 
+    app.waves = [];
+    app.rec.hasSignal = false;
+    app.rec.f_percue = 0;
+    app.rec.targetF = 0;
+    app.demoGhosts = [];
+    app.demoWaves = [];
+    app.movingLambdas = [];
+    app.isDemoRunning = false;
+    document.getElementById('btn-anim-demo').disabled = false;
+    document.getElementById('btn-anim-demo').innerText = "LANCER ANIMATION Te";
+}
+
+function resize() {
+    [cvsMain, cvsS, cvsR].forEach(c => {
+        // Seulement si visible (height > 0)
+        if(c.offsetParent !== null) {
+            const r = c.parentElement.getBoundingClientRect();
+            c.width = r.width;
+            c.height = r.height;
+        }
+    });
+}
+
+function initAudio() {
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    nodes = { osc, gain };
+}
+
+function setAudioTarget(t) {
+    app.audioTarget = t;
+    document.getElementById('btn-src').className = t==='src' ? 'switch-opt active' : 'switch-opt';
+    document.getElementById('btn-rec').className = t==='rec' ? 'switch-opt active' : 'switch-opt';
+}
+
+function loop() {
+    requestAnimationFrame(loop);
+    const now = performance.now();
+    let dt = (now - app.lastTime) / 1000;
+    app.lastTime = now;
+    if(dt > 0.1) dt = 0.1;
+    
+    // Rendu Fond
+    const w = cvsMain.width;
+    const h = cvsMain.height;
+    const cy = h/2;
+    ctxMain.fillStyle = "#f5f5f5"; 
+    ctxMain.fillRect(0,0,w,h);
+    
+    // Grille & Axe
+    ctxMain.strokeStyle = "#e0e0e0"; ctxMain.lineWidth = 1;
+    for(let i=0; i<w; i+=50) { ctxMain.beginPath(); ctxMain.moveTo(i,0); ctxMain.lineTo(i,h); ctxMain.stroke(); }
+    ctxMain.strokeStyle = "#999"; ctxMain.lineWidth = 2;
+    ctxMain.beginPath(); ctxMain.moveTo(0,cy); ctxMain.lineTo(w,cy); ctxMain.stroke();
+    
+    // En mode démo, on applique le ralentisseur
+    if(app.isDemo) {
+        // Le dt effectif pour la démo est pondéré par le curseur
+        const effectiveDt = dt * app.demoSpeedFactor;
+        updateAndDrawDemo(effectiveDt, w, h, cy);
+    } else {
+        updateAndDrawSimu(dt, w, h, cy);
+    }
+    
+    // Audio : seulement si activé
+    if(app.audioOn && !app.isDemo) { // Pas d'audio en mode démo (puisque panneau masqué, c'est logique)
+        updateAudio();
+    } else if(nodes && nodes.gain) {
+        // Mute forcé
+        nodes.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+    }
+    
+    // Oscilloscopes : seulement hors démo
+    if(!app.isDemo) {
+        drawScope(ctxS, app.src.f, '#d60040', true, true);
+        drawScope(ctxR, app.rec.hasSignal ? Math.abs(app.rec.f_percue) : 0, '#0055d4', app.rec.hasSignal, false);
+        
+        document.getElementById('val-fs').innerText = Math.round(app.src.f) + " Hz";
+        document.getElementById('val-fr').innerText = app.rec.hasSignal ? Math.round(Math.abs(app.rec.f_percue)) + " Hz" : "---";
+    }
+}
+
+function updateAndDrawSimu(dt, w, h, cy) {
+    app.t += dt;
+    let nxS = app.src.x + app.src.vx * METER_SCALE * dt;
+    let nxR = app.rec.x + app.rec.vx * METER_SCALE * dt;
+    const PAD = 50; 
+    if(nxS < PAD) { nxS=PAD; app.src.vx=0; updateUI('sl-vs',0); }
+    if(nxS > w-PAD) { nxS=w-PAD; app.src.vx=0; updateUI('sl-vs',0); }
+    if(nxR < PAD) { nxR=PAD; app.rec.vx=0; updateUI('sl-vr',0); }
+    if(nxR > w-PAD) { nxR=w-PAD; app.rec.vx=0; updateUI('sl-vr',0); }
+    app.src.x = nxS; app.rec.x = nxR;
+    
+    const visRate = (app.src.f / 440) * 1.5; 
+    app.src.phase += visRate * dt;
+    if(app.src.phase >= 1) {
+        app.src.phase -= 1;
+        app.waves.push({ x: app.src.x, r: 0 });
+    }
+    for(let i=app.waves.length-1; i>=0; i--) {
+        app.waves[i].r += C_VISUAL * dt;
+        if(app.waves[i].r > w*1.5) app.waves.splice(i,1);
+    }
+    
+    app.history.push({ t: app.t, x: app.src.x, vx: app.src.vx, f: app.src.f });
+    if(app.history.length > 2000) app.history.shift();
+    
+    let found = false; let snap = null;
+    for(let i=app.history.length-2; i>=0; i--) {
+        const p2 = app.history[i+1]; const p1 = app.history[i];   
+        const val2 = (app.t - p2.t)*C_VISUAL - Math.abs(app.rec.x - p2.x);
+        const val1 = (app.t - p1.t)*C_VISUAL - Math.abs(app.rec.x - p1.x);
+        if(val2 < 0 && val1 >= 0) {
+            const k = (0 - val2) / (val1 - val2); 
+            snap = { t: p2.t + k*(p1.t - p2.t), x: p2.x + k*(p1.x - p2.x), vx: p2.vx + k*(p1.vx - p2.vx), f: p2.f };
+            found = true; break; 
+        }
+    }
+    app.rec.hasSignal = found;
+    
+    if(found) {
+        const dir = Math.sign(app.rec.x - snap.x);
+        const vS = snap.vx * dir; 
+        const vR = app.rec.vx * dir;
+        let den = C_PHYS - vS; if(Math.abs(den) < 1) den = 1;
+        const ratio = (C_PHYS - vR) / den;
+        app.rec.f_percue = snap.f * ratio; 
+    }
+
+    ctxMain.lineWidth = 2;
+    app.waves.forEach(wv => {
+        const alpha = Math.max(0, 1 - wv.r/(w*0.8));
+        ctxMain.strokeStyle = `rgba(0,0,0,${alpha*0.3})`;
+        ctxMain.beginPath(); ctxMain.arc(wv.x, cy, wv.r, 0, Math.PI*2); ctxMain.stroke();
+    });
+    
+    drawEnt(ctxMain, app.src.x, cy, 0, '#d60040', 'S'); 
+    drawEnt(ctxMain, app.rec.x, cy, 0, '#0055d4', 'R'); 
+}
+
+function updateAndDrawDemo(dt, w, h, cy) {
+    const visRate = (app.src.f / 440) * 1.5; 
+    const T_vis = 1 / visRate;
+    const DURATION_REAL = 3.0; 
+    
+    let activeWave = null;
+    app.demoWaves.forEach(wv => {
+        const distFromCenter = Math.abs(app.rec.x - wv.x);
+        const distFromWave = Math.abs(distFromCenter - wv.r);
+        if(distFromWave < 15) activeWave = wv;
+    });
+
+    let t_disp, x_start_curr;
+    if(app.isDemoRunning) {
+        t_disp = app.demoTime;
+        x_start_curr = app.demoStartX;
+    } else {
+        t_disp = T_vis;
+        const dist_full = (app.src.vx * METER_SCALE) * T_vis;
+        x_start_curr = app.src.x - dist_full;
+    }
+    const currentRadius = C_VISUAL * t_disp;
+    const distFromCenterCurr = Math.abs(app.rec.x - x_start_curr);
+    const distFromWaveCurr = Math.abs(distFromCenterCurr - currentRadius);
+
+    if(distFromWaveCurr < 15) {
+        activeWave = { x: x_start_curr, vs: app.src.vx, f: app.src.f };
+    }
+
+    if(activeWave) {
+        const dir = Math.sign(app.rec.x - activeWave.x); 
+        const vS_mem = activeWave.vs * dir; 
+        const vR = app.rec.vx * dir;
+        let den = C_PHYS - vS_mem; if(Math.abs(den) < 1) den = 1;
+        const ratio = (C_PHYS - vR) / den;
+        app.rec.targetF = activeWave.f * ratio; 
+        app.rec.hasSignal = true; 
+    }
+    
+    if(app.rec.hasSignal) {
+        app.rec.f_percue += (app.rec.targetF - app.rec.f_percue) * 0.1;
+    }
+    
+    if(app.isDemoRunning) {
+        let nxR = app.rec.x + app.rec.vx * METER_SCALE * dt;
+        const PAD = 50; 
+        if(nxR < PAD) { nxR=PAD; app.rec.vx=0; updateUI('sl-vr',0); }
+        if(nxR > w-PAD) { nxR=w-PAD; app.rec.vx=0; updateUI('sl-vr',0); }
+        app.rec.x = nxR;
+
+        const step = (T_vis / DURATION_REAL) * dt;
+        app.demoTime += step;
+        
+        for(let i=app.demoWaves.length-1; i>=0; i--) {
+            app.demoWaves[i].r += C_VISUAL * step;
+            if(app.demoWaves[i].r > w*1.5) app.demoWaves.splice(i,1);
+        }
+
+        for(let i=app.movingLambdas.length-1; i>=0; i--) {
+            app.movingLambdas[i].t_age += step; 
+            const r = C_VISUAL * app.movingLambdas[i].t_age; 
+            if(r > w*1.2) app.movingLambdas.splice(i,1);
+        }
+        
+        const dist_src = (app.src.vx * METER_SCALE) * app.demoTime;
+        app.src.x = app.demoStartX + dist_src;
+        
+        if(app.demoTime >= T_vis) {
+            const waveX = app.demoStartX;
+            const waveR = C_VISUAL * T_vis;
+            const srcFinalX = app.demoStartX + (app.src.vx * METER_SCALE) * T_vis;
+            
+            app.demoWaves.push({ x: waveX, r: waveR, vs: app.src.vx, f: app.src.f });
+            app.demoGhosts.push(app.demoStartX); 
+            
+            app.movingLambdas.push({
+                center: waveX,
+                t_age: T_vis, 
+                emit_vs: app.src.vx
+            });
+
+            app.src.x = srcFinalX;
+            
+            const isLoop = document.getElementById('chk-loop').checked;
+            if(isLoop && srcFinalX > 20 && srcFinalX < w - 20) {
+                app.demoTime = 0;
+                app.demoStartX = srcFinalX;
+            } else {
+                app.isDemoRunning = false;
+                document.getElementById('btn-anim-demo').disabled = false;
+                document.getElementById('btn-anim-demo').innerText = "RELANCER ANIMATION Te";
+            }
+        }
+    }
+    
+    // --- VECTEURS ---
+    app.movingLambdas.forEach(l => {
+        let dir = 1; 
+        if(app.rec.x < l.center) dir = -1;
+        
+        const currentR = C_VISUAL * l.t_age;
+        const frontX = l.center + dir * currentR;
+        const lambdaLocal = (C_VISUAL - dir * (l.emit_vs * METER_SCALE)) * T_vis;
+        
+        const distR_Wave = Math.abs(app.rec.x - frontX);
+        const contact = (distR_Wave < 35); 
+        
+        const tailX = frontX - dir * lambdaLocal;
+        drawVectorLine(ctxMain, tailX, cy, frontX, cy, "#00aa00", "λ");
+        
+        if(contact && Math.abs(app.rec.vx) > 1) {
+            const recDistPx = (app.rec.vx * METER_SCALE) * T_vis; 
+            const blueEndX = frontX + recDistPx;
+            drawVectorLine(ctxMain, frontX, cy, blueEndX, cy, "#0055d4", "vR.Te");
+        }
+    });
+
+    ctxMain.globalAlpha = 0.6;
+    app.demoGhosts.forEach(gx => {
+         drawEnt(ctxMain, gx, cy, 0, '#8b0000', '');
+    });
+    ctxMain.globalAlpha = 1.0;
+    
+    ctxMain.lineWidth = 2;
+    app.demoWaves.forEach(wv => {
+        const alpha = Math.max(0, 1 - wv.r/(w*0.8));
+        ctxMain.strokeStyle = `rgba(0,0,0,${alpha*0.3})`;
+        ctxMain.beginPath(); ctxMain.arc(wv.x, cy, wv.r, 0, Math.PI*2); ctxMain.stroke();
+    });
+
+    const dist_onde_disp = C_VISUAL * t_disp;
+    
+    ctxMain.globalAlpha = 0.5;
+    drawEnt(ctxMain, x_start_curr, cy, 0, '#d60040', ''); 
+    ctxMain.globalAlpha = 1.0;
+    
+    ctxMain.strokeStyle = "rgba(128,0,128,0.8)";
+    ctxMain.lineWidth = 3;
+    ctxMain.beginPath(); ctxMain.arc(x_start_curr, cy, dist_onde_disp, 0, Math.PI*2); ctxMain.stroke();
+    
+    drawEnt(ctxMain, app.src.x, cy, 0, '#d60040', 'S');
+    
+    const y_top = cy - 40;
+    const y_bot = cy + 40;
+    
+    if(Math.abs(app.src.x - x_start_curr) > 2)
+        drawVectorLine(ctxMain, x_start_curr, y_top, app.src.x, y_top, "#d35400", app.isDemoRunning ? "v.t" : "v.Te");
+        
+    const x_wave_curr = x_start_curr + dist_onde_disp;
+    if(Math.abs(x_wave_curr - x_start_curr) > 2)
+        drawVectorLine(ctxMain, x_start_curr, y_bot, x_wave_curr, y_bot, "#8e44ad", app.isDemoRunning ? "v_onde.t" : "v_onde.Te");
+    
+    if(app.isDemoRunning) {
+        ctxMain.fillStyle = "#000"; ctxMain.font = "bold 16px monospace"; ctxMain.textAlign = "left";
+        ctxMain.fillText("t = " + (t_disp/T_vis).toFixed(2) + " Te", 20, 30);
+    }
+    
+    drawEnt(ctxMain, app.rec.x, cy, 0, '#0055d4', 'R');
+}
+
+function updateAudio() {
+    if(!audioCtx) return;
+    const now = audioCtx.currentTime;
+    let f = 440; let v = 0;
+    
+    // SI AUDIO ÉTEINT => VOLUME ZERO
+    if(!app.audioOn) {
+        v = 0;
+    } else {
+        if(app.audioTarget === 'src') { f = app.src.f; v = app.vol; }
+        else {
+            if(app.rec.hasSignal) { f = Math.abs(app.rec.f_percue); v = app.vol; }
+            else { v = 0; }
+        }
+    }
+    
+    nodes.osc.frequency.setTargetAtTime(Math.max(20, f), now, 0.05);
+    nodes.gain.gain.setTargetAtTime(v, now, 0.05);
+}
+
+function updateUI(id, val) {
+    document.getElementById(id).value = val;
+    const lbl = document.getElementById(id.replace('sl','disp'));
+    if(lbl) lbl.innerText = val + " m/s";
+}
+
+function drawVectorLine(ctx, x1, y1, x2, y2, color, label) {
+    if(Math.abs(x2-x1) < 2) return; 
+    ctx.strokeStyle = color; ctx.fillStyle = color; 
+    ctx.lineWidth = 4; 
+    ctx.lineCap = "butt"; 
+    
+    ctx.beginPath(); 
+    ctx.moveTo(x1, y1); 
+    ctx.lineTo(x2, y2); 
+    ctx.stroke();
+    
+    const xm = (x1+x2)/2;
+    const textY = (y1 === ctx.canvas.height/2) ? y1 - 8 : y1 - 4;
+    ctx.font = "bold 16px Segoe UI"; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; 
+    ctx.fillText(label, xm, textY);
+}
+
+function drawEnt(ctx, x, y, v, c, lbl) {
+    ctx.fillStyle = c;
+    ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill();
+    if(lbl) { ctx.fillStyle = "#000"; ctx.font="bold 14px monospace"; ctx.textAlign="center"; ctx.fillText(lbl, x, y-18); }
+}
+
+function drawScope(ctx, f, c, active, showTe) {
+    const w = ctx.canvas.width; const h = ctx.canvas.height;
+    ctx.clearRect(0,0,w,h); 
+    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = "#ddd"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+    if(!active) return;
+    const win = 0.02; 
+    ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.beginPath();
+    for(let x=0; x<w; x++) {
+        const t = (x/w)*win; const y = h/2 - (h*0.35)*Math.sin(2*Math.PI*f*t);
+        if(x==0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    if(showTe && app.isDemo) {
+        const T_sec = 1/f; const T_px = T_sec * (w/win); const y_arrow = h/2 + (h*0.25); 
+        ctx.strokeStyle = "#333"; ctx.fillStyle = "#333"; ctx.lineWidth = 2;
+        if(T_px < w) {
+            ctx.beginPath(); ctx.moveTo(0, y_arrow); ctx.lineTo(T_px, y_arrow); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, y_arrow-5); ctx.lineTo(0, y_arrow+5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(T_px, y_arrow-5); ctx.lineTo(T_px, y_arrow+5); ctx.stroke();
+            ctx.font = "bold 14px monospace"; ctx.textAlign = "center"; ctx.fillText("Te", T_px/2, y_arrow + 18);
+        }
+    }
+}
+
+init();
+</script>
+</body>
+</html>

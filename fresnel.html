@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratoire Virtuel : Fresnel & Tensions</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0; padding: 15px;
+            display: flex; flex-direction: column; align-items: center;
+            height: 100vh; box-sizing: border-box;
+            color: #333;
+        }
+
+        h1 { margin: 0 0 15px 0; color: #2c3e50; font-size: 1.4rem; }
+
+        /* Layout Principal */
+        .main-wrapper {
+            display: flex; flex-direction: column; gap: 15px;
+            max-width: 1250px; width: 100%; height: 100%;
+        }
+
+        /* Zone des contrôles rapides (Presets) */
+        .presets-bar {
+            display: flex; gap: 10px; justify-content: center;
+        }
+        .btn-preset {
+            background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50;
+            padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .btn-preset:hover { background: #bdc3c7; }
+
+        /* Conteneur Visualisation */
+        .viz-container {
+            display: flex; gap: 15px;
+            background: white; padding: 15px;
+            border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            flex: 1; min-height: 0; 
+        }
+
+        /* Colonne de Gauche (Paramètres) */
+        .controls {
+            width: 310px; display: flex; flex-direction: column; gap: 8px; 
+            overflow-y: auto; padding-right: 5px;
+        }
+
+        .control-group {
+            border: 1px solid #e0e0e0; padding: 8px; border-radius: 6px; background: #fafafa;
+        }
+
+        .control-header {
+            font-weight: bold; margin-bottom: 5px; font-size: 0.9rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        
+        .options-row {
+            display: flex; font-size: 0.75rem; color: #666; margin-bottom: 5px; gap: 8px;
+        }
+        .options-row label { display: flex; align-items: center; cursor: pointer; margin: 0;}
+        .options-row input { margin-right: 3px; }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px;}
+        
+        /* Inputs Mixte (Slider + Number) */
+        .input-row {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+        }
+        .input-row label { font-size: 0.8rem; color: #555; width: 45px; }
+        .input-row input[type=range] { flex: 1; cursor: pointer; }
+        .input-row input[type=number] { 
+            width: 45px; padding: 2px; font-size: 0.8rem; border: 1px solid #ccc; border-radius: 3px; text-align: right;
+        }
+
+        /* Boutons d'action */
+        .action-bar { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+        .btn-row { display: flex; gap: 8px; }
+        button.main-btn {
+            flex: 1; padding: 10px; border: none; border-radius: 5px;
+            font-weight: bold; cursor: pointer; color: white; transition: opacity 0.2s;
+        }
+        button.main-btn:hover { opacity: 0.9; }
+        #btn-play { background-color: #34495e; }
+        #btn-reset { background-color: #e74c3c; }
+        
+        .mode-toggle {
+            font-size: 0.8rem; text-align: center; cursor: pointer; color: #555;
+            background: #eee; padding: 4px; border-radius: 4px; user-select: none;
+        }
+
+        /* Zone Canvas */
+        .canvas-area { flex: 1; display: flex; gap: 10px; min-height: 0; position: relative;}
+
+        .viewport {
+            position: relative; background: #fff;
+            border: 1px solid #ccc; border-radius: 4px; flex-direction: column; display: flex;
+            overflow: hidden;
+        }
+
+        .vp-title {
+            position: absolute; top: 8px; left: 8px;
+            background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 4px;
+            font-size: 0.8rem; font-weight: bold; color: #444; pointer-events: none; border: 1px solid #ddd;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+        /* Tooltip sur le graphe */
+        #tooltip {
+            position: absolute; display: none; background: rgba(0,0,0,0.8); color: #fff;
+            padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; pointer-events: none;
+            white-space: nowrap; z-index: 10; transform: translate(10px, -10px);
+        }
+
+        /* Panneau Math */
+        .math-panel {
+            background: white; padding: 12px; border-radius: 8px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.03);
+            display: flex; flex-wrap: wrap; gap: 15px; justify-content: center;
+            font-family: 'Courier New', Courier, monospace;
+            border-top: 3px solid #34495e; min-height: 60px;
+        }
+        .math-item {
+            background: #f8f9fa; padding: 8px 12px; border-radius: 4px; border: 1px solid #eee;
+            min-width: 220px; font-size: 0.9rem;
+        }
+        .math-title { font-weight: bold; margin-bottom: 4px; font-family: 'Segoe UI', sans-serif; font-size: 0.8rem;}
+        .math-eq { color: #333; }
+        .math-sum { border: 2px solid #2c3e50; background: #eef2f5; }
+
+        /* Couleurs Spécifiques */
+        .col-v1 { border-left: 4px solid #e74c3c; }
+        .col-v2 { border-left: 4px solid #27ae60; }
+        .col-v3 { border-left: 4px solid #2980b9; }
+    </style>
+</head>
+<body>
+
+    <h1>Laboratoire Virtuel : Addition de Tensions Sinusoïdales</h1>
+    
+    <!-- Presets -->
+    <div class="presets-bar">
+        <div class="btn-preset" onclick="applyPreset('tri')">⚡ Triphasé Équilibré</div>
+        <div class="btn-preset" onclick="applyPreset('opp')">🛑 Opposition de Phase</div>
+        <div class="btn-preset" onclick="applyPreset('cons')">🌊 Constructif (Phase 0)</div>
+        <div class="btn-preset" onclick="applyPreset('fourier')">🎹 Synthèse (Harmoniques)</div>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="viz-container">
+            <!-- CONTROLES -->
+            <div class="controls">
+                <!-- V1 -->
+                <div class="control-group col-v1">
+                    <div class="control-header">
+                        <span><span class="dot" style="background:#e74c3c"></span>Tension u₁</span>
+                    </div>
+                    <div class="options-row">
+                        <label><input type="checkbox" id="active-v1" checked onchange="updateFromUI()"> Somme</label>
+                        <label><input type="checkbox" id="trace-v1" checked onchange="updateFromUI()"> Trace</label>
+                    </div>
+                    <div class="input-row">
+                        <label>Û (V)</label>
+                        <input type="range" id="range-a1" min="0" max="100" value="80" oninput="syncInputs('a1', this.value)">
+                        <input type="number" id="num-a1" min="0" max="100" value="80" oninput="syncInputs('a1', this.value)">
+                    </div>
+                    <div class="input-row">
+                        <label>φ (°)</label>
+                        <input type="range" id="range-p1" min="-180" max="180" value="0" oninput="syncInputs('p1', this.value)">
+                        <input type="number" id="num-p1" min="-180" max="180" value="0" oninput="syncInputs('p1', this.value)">
+                    </div>
+                </div>
+
+                <!-- V2 -->
+                <div class="control-group col-v2">
+                    <div class="control-header">
+                        <span><span class="dot" style="background:#27ae60"></span>Tension u₂</span>
+                    </div>
+                    <div class="options-row">
+                        <label><input type="checkbox" id="active-v2" onchange="updateFromUI()"> Somme</label>
+                        <label><input type="checkbox" id="trace-v2" onchange="updateFromUI()"> Trace</label>
+                    </div>
+                    <div class="input-row">
+                        <label>Û (V)</label>
+                        <input type="range" id="range-a2" min="0" max="100" value="80" oninput="syncInputs('a2', this.value)">
+                        <input type="number" id="num-a2" min="0" max="100" value="80" oninput="syncInputs('a2', this.value)">
+                    </div>
+                    <div class="input-row">
+                        <label>φ (°)</label>
+                        <input type="range" id="range-p2" min="-180" max="180" value="120" oninput="syncInputs('p2', this.value)">
+                        <input type="number" id="num-p2" min="-180" max="180" value="120" oninput="syncInputs('p2', this.value)">
+                    </div>
+                </div>
+
+                <!-- V3 -->
+                <div class="control-group col-v3">
+                    <div class="control-header">
+                        <span><span class="dot" style="background:#2980b9"></span>Tension u₃</span>
+                    </div>
+                    <div class="options-row">
+                        <label><input type="checkbox" id="active-v3" onchange="updateFromUI()"> Somme</label>
+                        <label><input type="checkbox" id="trace-v3" onchange="updateFromUI()"> Trace</label>
+                    </div>
+                    <div class="input-row">
+                        <label>Û (V)</label>
+                        <input type="range" id="range-a3" min="0" max="100" value="80" oninput="syncInputs('a3', this.value)">
+                        <input type="number" id="num-a3" min="0" max="100" value="80" oninput="syncInputs('a3', this.value)">
+                    </div>
+                    <div class="input-row">
+                        <label>φ (°)</label>
+                        <input type="range" id="range-p3" min="-180" max="180" value="-120" oninput="syncInputs('p3', this.value)">
+                        <input type="number" id="num-p3" min="-180" max="180" value="-120" oninput="syncInputs('p3', this.value)">
+                    </div>
+                </div>
+
+                <!-- Global -->
+                <div class="control-group">
+                    <div class="input-row">
+                        <label style="width:auto; flex:1;">Fréquence (Hz)</label>
+                        <span style="font-weight:bold; margin-right:5px;" id="freq-disp">50</span>
+                    </div>
+                    <input type="range" id="speed" min="0.1" max="3" step="0.1" value="1" oninput="updateFromUI()">
+                    <div style="font-size:0.75rem; color:#666; text-align:right; margin-top:2px;">
+                        Période T = <span id="period-disp">20</span> ms
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <div class="mode-toggle" onclick="toggleMode()" id="mode-btn">Mode: 🛑 Arrêt au bord</div>
+                    <div class="btn-row">
+                        <button class="main-btn" id="btn-play" onclick="togglePlay()">▶ Lecture</button>
+                        <button class="main-btn" id="btn-reset" onclick="resetSim()">RAZ ↺</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GRAPHIQUES -->
+            <div class="canvas-area">
+                <!-- Fresnel -->
+                <div class="viewport" style="width: 320px; flex:none;">
+                    <canvas id="canvasFresnel"></canvas>
+                    <div class="vp-title">Espace des Phases</div>
+                </div>
+                <!-- Temporel -->
+                <div class="viewport" style="flex:1;">
+                    <canvas id="canvasTime"></canvas>
+                    <div class="vp-title">Oscilloscope Virtuel</div>
+                    <div id="tooltip"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MATHS -->
+        <div class="math-panel" id="math-container"></div>
+    </div>
+
+<script>
+    // --- CONFIGURATION ---
+    const cvsF = document.getElementById('canvasFresnel');
+    const ctxF = cvsF.getContext('2d');
+    const cvsT = document.getElementById('canvasTime');
+    const ctxT = cvsT.getContext('2d');
+    const mathDiv = document.getElementById('math-container');
+    const tooltip = document.getElementById('tooltip');
+
+    // Etat Simulation
+    let time = 0; // "Temps" en unités arbitraires pour l'animation
+    let realTime = 0; // Temps physique en secondes (pour l'affichage)
+    let isPlaying = false; 
+    let stopAtEdge = true; // Mode par défaut
+    let stopNextEdge = true; 
+    
+    // Dimensions
+    let W_F, H_F, CX_F, CY_F;
+    let W_T, H_T, CY_T;
+
+    // Données physiques
+    const BASE_FREQ = 50; // Hz (quand speed = 1)
+    let currentFreq = 50;
+    
+    // Vecteurs
+    let vectors = [
+        { id: 1, A: 80, phi: 0, active: true, trace: true, color: '#e74c3c' },
+        { id: 2, A: 80, phi: 2.09, active: false, trace: false, color: '#27ae60' }, // 120°
+        { id: 3, A: 80, phi: -2.09, active: false, trace: false, color: '#2980b9' } // -120°
+    ];
+
+    // Historique : Array d'objets { t: temps_ms, v1: val, v2: val, v3: val, sum: val }
+    let history = [];
+    const TIME_WINDOW_MS = 40; // On affiche 40ms (2 périodes à 50Hz) par défaut
+
+    // --- INITIALISATION ---
+    function init() {
+        resize();
+        window.addEventListener('resize', resize);
+        
+        // Interaction Souris sur le graphe temporel (Tooltip)
+        cvsT.addEventListener('mousemove', handleMouseMove);
+        cvsT.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+        updateFromUI(); // Lire les valeurs par défaut du HTML
+        drawAll();
+    }
+
+    function resize() {
+        W_F = cvsF.parentElement.clientWidth; H_F = cvsF.parentElement.clientHeight;
+        cvsF.width = W_F; cvsF.height = H_F; 
+        CX_F = Math.floor(W_F / 2); CY_F = Math.floor(H_F / 2); 
+
+        W_T = cvsT.parentElement.clientWidth; H_T = cvsT.parentElement.clientHeight;
+        cvsT.width = W_T; cvsT.height = H_T; 
+        CY_T = Math.floor(H_T / 2);
+        drawAll();
+    }
+
+    // --- LOGIQUE UI ---
+
+    // Synchro slider <-> number input
+    function syncInputs(idSuffix, val) {
+        document.getElementById('range-' + idSuffix).value = val;
+        document.getElementById('num-' + idSuffix).value = val;
+        updateFromUI();
+    }
+
+    function updateFromUI() {
+        // Lecture Vecteurs
+        for(let i=0; i<3; i++) {
+            let id = i+1;
+            vectors[i].A = parseInt(document.getElementById(`num-a${id}`).value);
+            let deg = parseInt(document.getElementById(`num-p${id}`).value);
+            vectors[i].phi = deg * Math.PI / 180;
+            vectors[i].active = document.getElementById(`active-v${id}`).checked;
+            vectors[i].trace = document.getElementById(`trace-v${id}`).checked;
+        }
+
+        // Lecture Fréquence
+        let speedMul = parseFloat(document.getElementById('speed').value);
+        currentFreq = (BASE_FREQ * speedMul);
+        
+        // Affichage Infos
+        document.getElementById('freq-disp').innerText = currentFreq.toFixed(1);
+        let periodMs = (1000 / currentFreq);
+        document.getElementById('period-disp').innerText = periodMs.toFixed(1);
+
+        updateMathDisplay();
+        if(!isPlaying) drawAll();
+    }
+
+    function toggleMode() {
+        stopAtEdge = !stopAtEdge;
+        let btn = document.getElementById('mode-btn');
+        if(stopAtEdge) {
+            btn.innerText = "Mode: 🛑 Arrêt au bord";
+            btn.style.background = "#eee";
+            stopNextEdge = true;
+        } else {
+            btn.innerText = "Mode: 🔄 Continu";
+            btn.style.background = "#b2dfdb";
+            stopNextEdge = false;
+        }
+    }
+
+    function togglePlay() {
+        isPlaying = !isPlaying;
+        let btn = document.getElementById('btn-play');
+        btn.innerText = isPlaying ? "⏸ Pause" : "▶ Lecture";
+        
+        // Si on relance alors qu'on était stoppé au bord
+        if(isPlaying && stopAtEdge && history.length >= W_T) {
+             // Reset automatique ou continuation ? 
+             // Pour "Labo", on préfère souvent repartir du début si c'est fini
+             resetSim();
+             isPlaying = true;
+             document.getElementById('btn-play').innerText = "⏸ Pause";
+        }
+        
+        if(isPlaying) loop();
+    }
+
+    function resetSim() {
+        time = 0;
+        realTime = 0;
+        history = [];
+        isPlaying = false; 
+        stopNextEdge = true;
+        document.getElementById('btn-play').innerText = "▶ Lecture";
+        drawAll();
+    }
+
+    function applyPreset(type) {
+        // Helper pour set les inputs
+        const setV = (id, active, trace, amp, phase) => {
+            document.getElementById(`active-v${id}`).checked = active;
+            document.getElementById(`trace-v${id}`).checked = trace;
+            syncInputs(`a${id}`, amp);
+            syncInputs(`p${id}`, phase);
+        };
+
+        resetSim();
+
+        if(type === 'tri') {
+            setV(1, true, true, 80, 0);
+            setV(2, true, true, 80, -120);
+            setV(3, true, true, 80, 120);
+        } else if (type === 'opp') {
+            setV(1, true, true, 80, 0);
+            setV(2, true, true, 80, 180);
+            setV(3, false, false, 80, 0);
+        } else if (type === 'cons') {
+            setV(1, true, true, 50, 0);
+            setV(2, true, true, 50, 0);
+            setV(3, false, false, 50, 0);
+        } else if (type === 'fourier') {
+            // Simule fondamentale + harmonique 3
+            setV(1, true, true, 80, 0); // Fondamentale
+            setV(2, true, true, 30, 0); // Pseudo harmonique (fréquence pas simuable ici vectoriellement purement, mais on montre l'addition)
+            // Note: Fresnel ne simule que meme frequence. Ici c'est juste un preset d'addition d'amplitude differente.
+            // Pour le labo Fresnel strict, restons sur meme frequence.
+            setV(2, true, true, 40, 90);
+            setV(3, false, false, 20, 0);
+        }
+        updateFromUI();
+    }
+
+    // --- MATH & DISPLAY ---
+    function formatRad(radians) {
+        // Normalisation [-PI, PI]
+        while (radians > Math.PI) radians -= 2*Math.PI;
+        while (radians <= -Math.PI) radians += 2*Math.PI;
+        
+        let sign = radians >= 0 ? "+" : "-";
+        let absRad = Math.abs(radians);
+
+        if (Math.abs(absRad) < 0.01) return ""; 
+        if (Math.abs(absRad - Math.PI) < 0.05) return `${sign} π`;
+        if (Math.abs(absRad - Math.PI/2) < 0.05) return `${sign} π/2`;
+        if (Math.abs(absRad - 2*Math.PI/3) < 0.05) return `${sign} 2π/3`;
+        return `${sign} ${absRad.toFixed(2)}`;
+    }
+
+    function updateMathDisplay() {
+        let html = "";
+        let sumX = 0; let sumY = 0;
+        let anyActive = false;
+        let omegaVal = (currentFreq * 2 * Math.PI).toFixed(0); // Entier pour lisibilité
+
+        vectors.forEach(v => {
+            if(v.active) {
+                anyActive = true;
+                sumX += v.A * Math.cos(v.phi); 
+                sumY += v.A * Math.sin(v.phi);
+            }
+            // Affiche si actif ou trace
+            if(v.active || v.trace) {
+                let Ueff = (v.A / Math.SQRT2).toFixed(1);
+                let radStr = formatRad(v.phi);
+                html += `
+                <div class="math-item" style="border-left: 4px solid ${v.color}">
+                    <div class="math-title" style="color:${v.color}">u<sub>${v.id}</sub>(t)</div>
+                    <div class="math-eq">${Ueff}√2 sin(${omegaVal}t ${radStr})</div>
+                </div>`;
+            }
+        });
+
+        if (anyActive) {
+            let sumA = Math.sqrt(sumX*sumX + sumY*sumY);
+            let sumPhi = Math.atan2(sumY, sumX);
+            let sumUeff = (sumA / Math.SQRT2).toFixed(1);
+            let sumRadStr = formatRad(sumPhi);
+
+            html += `
+                <div class="math-item math-sum">
+                    <div class="math-title">Somme u<sub>sum</sub>(t)</div>
+                    <div class="math-eq"><strong>${sumUeff}√2 sin(${omegaVal}t ${sumRadStr})</strong></div>
+                </div>
+            `;
+        }
+        mathDiv.innerHTML = html;
+    }
+
+    // --- PHYSIQUE LOOP ---
+    function loop() {
+        if (!isPlaying) return;
+
+        // Pas de temps pour la simu
+        let speed = parseFloat(document.getElementById('speed').value);
+        let dt_sim = 0.03 * speed; // Incrément angle
+        time += dt_sim;
+
+        // Incrément temps réel (approximatif pour l'affichage ms)
+        // On suppose que le canvas width (W_T) représente TIME_WINDOW_MS
+        // Le défilement est de 1px par frame.
+        // Il faut calibrer : si 1px = X ms.
+        // Disons que le graphe représente toujours ~2 périodes à 1Hz, c'est complexe si f change.
+        // SIMPLIFICATION : On map l'axe X du graphe à une fenêtre fixe de 40ms (20ms/div) pour l'affichage.
+        // Donc chaque pixel vaut 40ms / W_T.
+        let msPerPixel = TIME_WINDOW_MS / W_T; 
+        realTime += msPerPixel; 
+
+        let sumY = 0;
+        let frameData = { ms: realTime, sum: 0, v1: 0, v2: 0, v3: 0 };
+
+        vectors.forEach((v, i) => {
+            // Y inversé pour le canvas (haut = négatif) MAIS calcul physique standard
+            // On stocke la valeur physique
+            let val = v.A * Math.sin(time + v.phi);
+            if(v.active) sumY += val;
+            if(i===0) frameData.v1 = val;
+            if(i===1) frameData.v2 = val;
+            if(i===2) frameData.v3 = val;
+        });
+        frameData.sum = sumY;
+
+        // Gestion Scroll / Scan
+        history.unshift(frameData);
+        
+        // Si mode continu, on coupe la fin
+        if (!stopAtEdge) {
+             if (history.length > W_T) history.pop();
+        } 
+        // Si mode arrêt au bord, on laisse remplir jusqu'à W_T
+        else {
+             if (history.length > W_T) {
+                 history.pop(); // On maintient la taille
+                 if(stopNextEdge) {
+                     isPlaying = false;
+                     stopNextEdge = false; // Reset flag
+                     document.getElementById('btn-play').innerText = "▶ Lecture";
+                 }
+             }
+        }
+
+        drawAll();
+        requestAnimationFrame(loop);
+    }
+
+    function drawAll() {
+        drawFresnel();
+        drawTime();
+    }
+
+    // --- DESSIN FRESNEL ---
+    function drawFresnel() {
+        ctxF.clearRect(0, 0, W_F, H_F);
+        
+        // Grille Polaire légère
+        ctxF.strokeStyle = "#f0f0f0"; ctxF.lineWidth = 1;
+        ctxF.beginPath();
+        ctxF.arc(CX_F, CY_F, 50, 0, 2*Math.PI); 
+        ctxF.arc(CX_F, CY_F, 100, 0, 2*Math.PI); 
+        ctxF.arc(CX_F, CY_F, 150, 0, 2*Math.PI);
+        ctxF.stroke();
+        
+        // Axes
+        ctxF.strokeStyle = "#ddd";
+        ctxF.beginPath(); ctxF.moveTo(CX_F, 0); ctxF.lineTo(CX_F, H_F); ctxF.moveTo(0, CY_F); ctxF.lineTo(W_F, CY_F); ctxF.stroke();
+
+        let currentX = CX_F;
+        let currentY = CY_F;
+
+        // A. Vecteurs Origine (Trace)
+        vectors.forEach(v => {
+            if (!v.trace) return;
+            let theta = time + v.phi;
+            // Math correcte : X = cos, Y = -sin (car axe canvas Y vers bas)
+            let dx = v.A * Math.cos(theta);
+            let dy = -v.A * Math.sin(theta);
+            
+            ctxF.save(); 
+            
+            // Vecteur fantôme
+            ctxF.globalAlpha = 0.3;
+            drawArrow(ctxF, CX_F, CY_F, CX_F + dx, CY_F + dy, v.color, 2);
+            
+            // Projection
+            ctxF.setLineDash([4, 4]); ctxF.strokeStyle = v.color; ctxF.globalAlpha = 0.6;
+            ctxF.beginPath(); ctxF.moveTo(CX_F + dx, CY_F + dy); ctxF.lineTo(W_F, CY_F + dy); ctxF.stroke();
+            ctxF.restore();
+        });
+
+        // B. Vecteurs Somme (Bout à bout)
+        let anyActive = false;
+        vectors.forEach(v => {
+            if (!v.active) return;
+            anyActive = true;
+            let theta = time + v.phi;
+            let dx = v.A * Math.cos(theta);
+            let dy = -v.A * Math.sin(theta);
+            let nextX = currentX + dx; let nextY = currentY + dy;
+            drawArrow(ctxF, currentX, currentY, nextX, nextY, v.color, 2);
+            currentX = nextX; currentY = nextY;
+        });
+
+        // C. Résultante
+        if (anyActive) {
+            drawArrow(ctxF, CX_F, CY_F, currentX, currentY, "#2c3e50", 4);
+            ctxF.setLineDash([4, 4]); ctxF.strokeStyle = "#2c3e50"; ctxF.lineWidth = 1;
+            ctxF.beginPath(); ctxF.moveTo(currentX, currentY); ctxF.lineTo(W_F, currentY); ctxF.stroke();
+            ctxF.setLineDash([]);
+        }
+    }
+
+    // --- DESSIN TEMPOREL (OSCILLO) ---
+    function drawTime() {
+        ctxT.clearRect(0, 0, W_T, H_T);
+        
+        // --- GRILLE & AXES ---
+        ctxT.strokeStyle = "#f0f0f0"; ctxT.lineWidth = 1;
+        ctxT.beginPath();
+        // Verticales (Temps) : Tous les ~50px
+        const gridStepX = W_T / 8; // 8 divisions
+        for(let x = 0; x <= W_T; x += gridStepX) { ctxT.moveTo(x, 0); ctxT.lineTo(x, H_T); }
+        // Horizontales (Tension)
+        const gridStepY = 50; 
+        for(let y = CY_T; y < H_T; y += gridStepY) { ctxT.moveTo(0, y); ctxT.lineTo(W_T, y); }
+        for(let y = CY_T; y > 0; y -= gridStepY) { ctxT.moveTo(0, y); ctxT.lineTo(W_T, y); }
+        ctxT.stroke();
+
+        // Axe Zéro
+        ctxT.strokeStyle = "#aaa"; 
+        ctxT.beginPath(); ctxT.moveTo(0, CY_T + 0.5); ctxT.lineTo(W_T, CY_T + 0.5); ctxT.stroke();
+
+        // Labels Axes
+        ctxT.fillStyle = "#999"; ctxT.font = "10px Segoe UI";
+        ctxT.fillText("0", 2, CY_T - 2);
+        ctxT.fillText("t (ms)", W_T - 30, H_T - 5);
+        ctxT.fillText("u (V)", 5, 10);
+
+        if (history.length === 0) return;
+
+        let headX = history.length; 
+        // Si on dépasse, headX reste à droite (scrolling)
+        if (history.length >= W_T) headX = W_T;
+
+        let anyActive = vectors.some(v => v.active);
+
+        // 1. Traces individuelles
+        vectors.forEach((v, i) => {
+            if(!v.trace) return;
+
+            let valKey = (i===0) ? 'v1' : (i===1) ? 'v2' : 'v3';
+            let currentVal = history[0][valKey];
+            let currentY_Screen = CY_T - currentVal;
+
+            // Lien visuel
+            ctxT.setLineDash([4, 4]); ctxT.strokeStyle = v.color; ctxT.globalAlpha = 0.6;
+            ctxT.beginPath(); ctxT.moveTo(0, currentY_Screen); ctxT.lineTo(headX, currentY_Screen); ctxT.stroke();
+            
+            // Point
+            ctxT.setLineDash([]); ctxT.globalAlpha = 1.0; ctxT.fillStyle = v.color;
+            ctxT.beginPath(); ctxT.arc(headX, currentY_Screen, 3, 0, 2*Math.PI); ctxT.fill();
+
+            drawCurve(history.map(h => h[valKey]), v.color, 1.5, headX);
+        });
+
+        // 2. Trace Somme
+        if (anyActive) {
+            let currentVal = history[0].sum;
+            let currentY_Screen = CY_T - currentVal;
+
+            ctxT.setLineDash([4, 4]); ctxT.strokeStyle = "#2c3e50"; ctxT.globalAlpha = 0.5;
+            ctxT.beginPath(); ctxT.moveTo(0, currentY_Screen); ctxT.lineTo(headX, currentY_Screen); ctxT.stroke();
+            ctxT.setLineDash([]); ctxT.globalAlpha = 1.0; ctxT.fillStyle = "#2c3e50";
+            ctxT.beginPath(); ctxT.arc(headX, currentY_Screen, 4, 0, 2*Math.PI); ctxT.fill();
+
+            drawCurve(history.map(h => h.sum), "#2c3e50", 3, headX);
+        }
+    }
+
+    function drawCurve(dataArray, color, width, headX) {
+        ctxT.beginPath(); ctxT.strokeStyle = color; ctxT.lineWidth = width;
+        // Optimisation : ne pas tout dessiner si array géant
+        let step = 1; 
+        for (let i = 0; i < dataArray.length; i+=step) {
+            let x = headX - i; 
+            let y = CY_T - dataArray[i]; 
+            if (x < 0) break; 
+            if (i === 0) ctxT.moveTo(x, y); else ctxT.lineTo(x, y);
+        }
+        ctxT.stroke();
+    }
+
+    function drawArrow(ctx, fromx, fromy, tox, toy, color, width) {
+        const headlen = 8;
+        const dx = tox - fromx; const dy = toy - fromy;
+        const angle = Math.atan2(dy, dx);
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+        ctx.beginPath(); ctx.moveTo(fromx, fromy); ctx.lineTo(tox, toy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(tox, toy);
+        ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.lineTo(tox, toy); ctx.fill();
+    }
+
+    // --- TOOLTIP LOGIC ---
+    function handleMouseMove(e) {
+        if(history.length === 0) return;
+
+        const rect = cvsT.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        
+        // Trouver l'index dans l'historique correspondant à X
+        // headX est la position du point le plus récent (index 0)
+        let headX = (history.length >= W_T) ? W_T : history.length;
+        
+        // L'index i dans l'historique correspond à : x = headX - i
+        // Donc i = headX - mouseX
+        let i = Math.round(headX - mouseX);
+
+        if(i >= 0 && i < history.length) {
+            let data = history[i];
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 10) + 'px';
+            tooltip.style.top = (e.clientY - 10) + 'px';
+            
+            // On veut afficher la somme ou la trace active
+            let activeVal = vectors[0].active ? data.sum : data.v1; 
+            // Si somme active, on montre somme, sinon V1 par defaut (simplification)
+            
+            tooltip.innerHTML = `t: ${(i * (TIME_WINDOW_MS/W_T)).toFixed(1)} ms<br>u: ${activeVal.toFixed(1)} V`;
+        } else {
+            tooltip.style.display = 'none';
+        }
+    }
+
+    setTimeout(init, 100);
+</script>
+</body>
+</html>

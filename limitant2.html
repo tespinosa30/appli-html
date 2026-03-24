@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Réactif limitant : NaHCO₃ + H₃O⁺ (Final)</title>
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      
+      --bbt-yellow: #fef08a;
+      --bbt-green: #86efac;
+      --bbt-blue: #93c5fd;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-color);
+      color: var(--text);
+      margin: 0;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .equation-banner {
+        width: 100%;
+        max-width: 1200px;
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+    }
+    .equation-banner .eq { font-weight: 700; font-size: 1rem; }
+    .equation-banner .vm { font-family: monospace; background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr; 
+      grid-template-rows: 58fr 42fr; 
+      gap: 15px;
+      width: 100%;
+      max-width: 1200px;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .controls-panel {
+      grid-column: 1;
+      grid-row: 1;
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+
+    .panel-section { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 0; }
+    .slider-compact { margin-bottom: 8px; }
+    input[type=range]:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .slider-header { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 0.8rem; }
+    label { font-weight: 600; color: #475569; }
+    
+    .slider-value { 
+        font-family: monospace; font-weight: bold; color: var(--primary); font-size: 0.85rem; 
+        cursor: pointer; 
+        border-bottom: 1px dashed rgba(37, 99, 235, 0.3); 
+        transition: all 0.2s;
+    }
+    .slider-value:hover {
+        background-color: #eff6ff;
+        border-bottom: 1px dashed var(--primary);
+    }
+
+    input[type=range] { width: 100%; cursor: pointer; height: 5px; margin: 5px 0; }
+
+    .buttons-row { display: flex; gap: 8px; }
+    .btn {
+        flex: 1; border: none; padding: 8px; border-radius: 5px;
+        font-weight: 600; cursor: pointer; font-size: 0.85rem;
+        display: flex; align-items: center; justify-content: center; gap: 5px;
+        transition: all 0.2s;
+    }
+    .btn-play { background: var(--primary); color: white; }
+    .btn-play:hover { background: var(--primary-hover); }
+    .btn-play:disabled { background: #cbd5e1; cursor: not-allowed; }
+    .btn-reset { background: white; border: 1px solid #cbd5e1; color: #64748b; }
+    .btn-reset:hover { background: #f1f5f9; color: #334155; }
+
+    .toggle-opt {
+        display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
+        color: #334155; cursor: pointer; padding: 8px;
+        background: #f8fafc; border-radius: 5px; border: 1px solid var(--border);
+    }
+    .toggle-opt.disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .res-mini {
+        font-size: 0.8rem; background: #f8fafc; padding: 10px;
+        border-radius: 5px; border: 1px solid var(--border); display: none;
+    }
+    .res-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .res-data { font-weight: 700; color: #0f172a; font-family: monospace; }
+    
+    .indicator-legend {
+        font-size: 0.75rem; color: #64748b; margin-top: -5px; margin-bottom: 8px;
+        text-align: center; background: #f1f5f9; padding: 4px; border-radius: 4px;
+        border: 1px solid #e2e8f0;
+    }
+    .indicator-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 2px; }
+    .dot-y { background-color: var(--bbt-yellow); border: 1px solid #d97706; }
+    .dot-b { background-color: var(--bbt-blue); border: 1px solid #2563eb; }
+
+    .signature {
+        margin-top: auto; 
+        font-size: 0.7rem; color: #94a3b8; text-align: center;
+        padding-top: 10px; font-style: italic;
+    }
+
+    .display-area {
+        grid-column: 2;
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: stretch;
+        min-height: 0;
+    }
+    .canvas-card {
+        background: linear-gradient(to bottom, #f8fafc 0%, #e2e8f0 100%);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        flex: 1; 
+        display: flex; justify-content: center; align-items: center;
+        overflow: hidden;
+    }
+    svg { display: block; height: 100%; width: auto; max-width: 100%; max-height: 100%; }
+
+    .theory-full-width {
+        grid-column: 1 / span 2; 
+        grid-row: 2;
+        display: none; 
+        gap: 15px;
+        min-height: 0;
+        height: 100%;
+        padding-bottom: 5px;
+    }
+    .table-container {
+        flex: 1.2; 
+        background: white; border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+        overflow-y: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+    th { background: #f8fafc; color: #475569; font-weight: 600; position: sticky; top: 0; }
+    .col-header { background: #e2e8f0; font-weight: bold; }
+    .col-eq { text-align: left; font-weight: bold; color: var(--primary); width: 110px; }
+    .row-highlight { background: #eff6ff; }
+    .row-final { opacity: 0; transition: opacity 0.5s; }
+    .row-final.show { opacity: 1; }
+    .unit-hint { font-size: 0.75rem; color: #64748b; text-align: right; margin-top: 5px; font-style: italic; }
+
+    .graph-container {
+        flex: 1;
+        background: white; border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+        display: flex; justify-content: center; align-items: center;
+    }
+    canvas { width: 100%; height: 100%; }
+
+  </style>
+</head>
+<body>
+
+  <div class="equation-banner">
+      <span class="eq">NaHCO₃<sub>(s)</sub> + H₃O⁺<sub>(aq)</sub> → CO₂<sub>(g)</sub> + H₂O<sub>(l)</sub> + Na⁺<sub>(aq)</sub></span>
+      <span class="vm">V<sub>m</sub> = 24 L.mol<sup>-1</sup></span>
+  </div>
+
+  <div class="main-grid">
+    <div class="controls-panel">
+      <div class="indicator-legend">
+          Indicateur coloré : BBT <br>
+          <span class="indicator-dot dot-y"></span>Acide &nbsp; | &nbsp; <span class="indicator-dot dot-b"></span>Basique
+      </div>
+
+      <div class="panel-section">
+          <div class="slider-compact">
+            <div class="slider-header">
+                <label>Masse NaHCO₃</label>
+                <span class="slider-value" id="valMass" onclick="editValue('mass')" title="Cliquer pour éditer">1.0 g</span>
+            </div>
+            <input type="range" id="slMass" min="0" max="2" step="0.1" value="1.0" 
+                   onmousedown="this.step='0.1'" ontouchstart="this.step='0.1'" oninput="updateInputs()">
+          </div>
+          
+          <div class="slider-compact">
+            <div class="slider-header">
+                <label>Volume Acide</label>
+                <span class="slider-value" id="valVol" onclick="editValue('vol')" title="Cliquer pour éditer">20 mL</span>
+            </div>
+            <input type="range" id="slVol" min="0" max="40" step="1" value="20" 
+                   onmousedown="this.step='1'" ontouchstart="this.step='1'" oninput="updateInputs()">
+          </div>
+          
+          <div class="slider-compact">
+            <div class="slider-header">
+                <label>Concentration [H₃O⁺]</label>
+                <span class="slider-value" id="valConc" onclick="editValue('conc')" title="Cliquer pour éditer">1.0 mol.L<sup>-1</sup></span>
+            </div>
+            <input type="range" id="slConc" min="0" max="2.0" step="0.1" value="1.0" 
+                   onmousedown="this.step='0.1'" ontouchstart="this.step='0.1'" oninput="updateInputs()">
+          </div>
+          
+          <div class="slider-compact" style="margin-top: 5px; border-top: 1px dashed #e2e8f0; paddingTop: 5px;">
+            <div class="slider-header"><label style="color:#64748b;">Vitesse Animation</label><span class="slider-value" id="valSpeed" style="color:#64748b;">x1.0</span></div>
+            <input type="range" id="slSpeed" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateSpeed()">
+          </div>
+      </div>
+      
+      <div class="buttons-row">
+          <button class="btn btn-play" id="btnStart" onclick="runSim()"><span>▶ Lancer</span></button>
+          <button class="btn btn-reset" onclick="resetSim()"><span>↺ RàZ</span></button>
+      </div>
+      
+      <label class="toggle-opt" id="lblTheory">
+          <input type="checkbox" id="chkTheory" onchange="toggleTheory()">
+          <span>Afficher les Calculs théoriques</span>
+      </label>
+      
+      <div class="res-mini" id="resBox">
+        <div class="res-row"><span>Limitant</span> <span class="res-data" id="dispLim">-</span></div>
+        <div class="res-row"><span>V(CO₂)</span> <span class="res-data" id="dispVol">-</span></div>
+        <div class="res-row"><span>Reste Solide</span> <span class="res-data" id="dispMassRest">-</span></div>
+      </div>
+
+      <div class="signature">Espinosa T. - Lycée Albert Einstein</div>
+    </div>
+
+    <!-- EXPERIENCE -->
+    <div class="display-area">
+        <div class="canvas-card">
+            <svg viewBox="0 0 750 400" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="gradGlass" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.8)"/><stop offset="30%" stop-color="rgba(255,255,255,0.1)"/><stop offset="70%" stop-color="rgba(255,255,255,0.1)"/><stop offset="100%" stop-color="rgba(255,255,255,0.8)"/>
+                  </linearGradient>
+                  <linearGradient id="gradWater" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.6"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0.8"/>
+                  </linearGradient>
+                  <clipPath id="clipCyl"><rect x="-10" y="-20" width="100" height="320"/></clipPath>
+                  <clipPath id="clipErlenInside"><path d="M125,400 L235,400 L200,280 L165,280 Z" /></clipPath>
+                  <clipPath id="clipTubeInside"><rect x="2" y="2" width="66" height="298" /></clipPath>
+                </defs>
+                
+                <rect x="0" y="380" width="750" height="50" fill="#94a3b8" />
+                <line x1="0" y1="380" x2="750" y2="380" stroke="#475569" stroke-width="2"/>
+
+                <g transform="translate(380, 260)">
+                  <path d="M5,40 h260 v75 a5,5 0 0,1 -5,5 h-250 a5,5 0 0,1 -5,-5 Z" fill="url(#gradWater)" />
+                  <path d="M0,0 v115 a5,5 0 0,0 5,5 h260 a5,5 0 0,0 5,-5 v-115" fill="none" stroke="#cbd5e1" stroke-width="2"/>
+                </g>
+
+                <g id="erlenGroup" transform="translate(60, -20)"> 
+                   <g clip-path="url(#clipErlenInside)">
+                       <path id="erlenLiquid" d="" fill="#fef08a" opacity="0.85" />
+                       <g id="bubblesErlen"></g>
+                   </g>
+                   <path id="solidPile" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />
+                   <path d="M165,220 v60 L125,400 h110 L200,280 v-60 h-35" fill="url(#gradGlass)" stroke="#64748b" stroke-width="2"/>
+                   <rect x="163" y="210" width="39" height="12" rx="2" fill="#7c2d12"/>
+                </g>
+
+                <g transform="translate(485, 360)">
+                   <path d="M-40,0 v15 a5,5 0 0,0 5,5 h70 a5,5 0 0,0 5,-5 v-15 Z" fill="#cbd5e1" stroke="#64748b" stroke-width="2"/>
+                   <ellipse cx="0" cy="0" rx="10" ry="3" fill="#475569"/>
+                </g>
+
+                <path d="M240,195 Q240,130 280,130 L350,130 Q430,130 440,230 L440,370 L465,370 L475,370 L485,370 L485,350" 
+                      fill="none" stroke="#64748b" stroke-width="6" stroke-linecap="round" opacity="0.5"/>
+                <path d="M240,195 Q240,130 280,130 L350,130 Q430,130 440,230 L440,370 L465,370 L475,370 L485,370 L485,350" 
+                      fill="none" stroke="#64748b" stroke-width="1.5" opacity="0.8"/>
+
+                <g transform="translate(450, 60)">
+                   <g clip-path="url(#clipTubeInside)">
+                       <rect id="cylWater" x="2" y="2" width="66" height="298" fill="url(#gradWater)" />
+                       <g id="bubblesCyl"></g>
+                   </g>
+                   <path d="M0,0 v300 M70,0 v300 M0,0 a35,10 0 0,1 70,0" fill="url(#gradGlass)" stroke="#64748b" stroke-width="2"/>
+                   <path d="M-5,0 L-10,-5 L80,-5 L75,0 Z" fill="#e2e8f0" stroke="#64748b" stroke-width="1.5"/>
+                   <rect x="-10" y="-12" width="90" height="7" rx="1" fill="#cbd5e1" stroke="#64748b" stroke-width="1"/>
+                   <g stroke="#475569" opacity="0.8" font-family="sans-serif" font-size="9" font-weight="bold">
+                     <line x1="45" y1="0" x2="70" y2="0"/> <text x="25" y="3">0</text>
+                     <line x1="50" y1="50" x2="70" y2="50"/> <text x="15" y="53">100</text>
+                     <line x1="50" y1="100" x2="70" y2="100"/> <text x="15" y="103">200</text>
+                     <line x1="50" y1="150" x2="70" y2="150"/> <text x="15" y="153">300</text>
+                     <line x1="50" y1="200" x2="70" y2="200"/> <text x="15" y="203">400</text>
+                     <line x1="50" y1="250" x2="70" y2="250"/> <text x="15" y="253">500</text>
+                     <line x1="45" y1="300" x2="70" y2="300"/> <text x="15" y="295">600</text>
+                     <path d="M60,10 h10 M60,20 h10 M60,30 h10 M60,40 h10 M60,60 h10 M60,70 h10 M60,80 h10 M60,90 h10 M60,110 h10 M60,120 h10 M60,130 h10 M60,140 h10 M60,160 h10 M60,170 h10 M60,180 h10 M60,190 h10 M60,210 h10 M60,220 h10 M60,230 h10 M60,240 h10 M60,260 h10 M60,270 h10 M60,280 h10 M60,290 h10" stroke-width="1"/>
+                   </g>
+                </g>
+
+                <g transform="translate(380, 260)">
+                   <path d="M0,0 v115 a5,5 0 0,0 5,5 h260 a5,5 0 0,0 5,-5 v-115" fill="url(#gradGlass)" opacity="0.3"/>
+                   <line x1="5" y1="40" x2="265" y2="40" stroke="#bae6fd" stroke-width="2" opacity="0.6"/>
+                </g>
+                <text id="lblGas" x="530" y="80" font-family="sans-serif" font-weight="bold" fill="#0f172a" font-size="14"></text>
+            </svg>
+        </div>
+    </div>
+
+    <div class="theory-full-width" id="theorySection">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr><th class="col-eq">Équation</th><th class="col-header">NaHCO₃</th><th>+</th><th class="col-header">H₃O⁺</th><th>→</th><th class="col-header">CO₂</th><th>+</th><th class="col-header">H₂O</th><th>+</th><th class="col-header">Na⁺</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td class="col-eq">Initial (x=0)</td><td id="t_ni_s">-</td><td></td><td id="t_ni_a">-</td><td></td><td>0</td><td></td><td>Solv.</td><td></td><td>0</td></tr>
+                    <tr class="row-highlight"><td class="col-eq">En cours (x)</td><td id="t_nc_s">-</td><td></td><td id="t_nc_a">-</td><td></td><td id="t_nc_g">-</td><td></td><td>Solv.</td><td></td><td id="t_nc_na">-</td></tr>
+                    <tr class="row-final" id="rowFinal"><td class="col-eq">Final (x<sub>max</sub>)</td><td id="t_nf_s">-</td><td></td><td id="t_nf_a">-</td><td></td><td id="t_nf_g">-</td><td></td><td>Solv.</td><td></td><td id="t_nf_na">-</td></tr>
+                </tbody>
+            </table>
+            <div class="unit-hint">* Quantités de matière en millimoles (mmol)</div>
+        </div>
+        <div class="graph-container"><canvas id="graphCanvas"></canvas></div>
+    </div>
+  </div>
+
+  <script>
+    const M_NAHCO3 = 84.0; const VM = 24.0; 
+    const CYL_WATER_START_Y = 2; const CYL_WATER_FULL_H = 298; 
+    const ERLEN_BASE_Y = 378; const ERLEN_CENTER_X = 180; 
+
+    const COL_BBT_YELLOW = {r:254, g:240, b:138};
+    const COL_BBT_GREEN  = {r:134, g:239, b:172};
+    const COL_BBT_BLUE   = {r:147, g:197, b:253};
+
+    const slMass = document.getElementById('slMass'); const slVol = document.getElementById('slVol'); const slConc = document.getElementById('slConc');
+    const valMass = document.getElementById('valMass'); const valVol = document.getElementById('valVol'); const valConc = document.getElementById('valConc');
+    const slSpeed = document.getElementById('slSpeed'); const valSpeed = document.getElementById('valSpeed');
+    
+    const erlenLiquidPath = document.getElementById('erlenLiquid'); const solidPilePath = document.getElementById('solidPile');
+    const cylWaterRect = document.getElementById('cylWater'); const grpBubblesErlen = document.getElementById('bubblesErlen'); const grpBubblesCyl = document.getElementById('bubblesCyl');
+    const lblGas = document.getElementById('lblGas'); const resBox = document.getElementById('resBox');
+    const theorySection = document.getElementById('theorySection'); const rowFinal = document.getElementById('rowFinal');
+    const chkTheory = document.getElementById('chkTheory'); const lblTheory = document.getElementById('lblTheory');
+    
+    const t_ni_s = document.getElementById('t_ni_s'); const t_ni_a = document.getElementById('t_ni_a');
+    const t_nc_s = document.getElementById('t_nc_s'); const t_nc_a = document.getElementById('t_nc_a'); const t_nc_g = document.getElementById('t_nc_g'); const t_nc_na = document.getElementById('t_nc_na');
+    const t_nf_s = document.getElementById('t_nf_s'); const t_nf_a = document.getElementById('t_nf_a'); const t_nf_g = document.getElementById('t_nf_g'); const t_nf_na = document.getElementById('t_nf_na');
+    const canvas = document.getElementById('graphCanvas'); const ctx = canvas.getContext('2d');
+
+    let erlenLiquidLocalY = 400; 
+    let animId = null; let particles = []; let nS_init, nA_init, xMax_val;
+    let currentTime = 0; const TAU = 2.0; let lastTimestamp = 0;
+
+    function resizeCanvas() {
+        const box = canvas.parentElement; canvas.width = box.clientWidth; canvas.height = box.clientHeight;
+        if(nS_init) drawGraph(0);
+    }
+    window.addEventListener('resize', resizeCanvas); setTimeout(resizeCanvas, 100);
+
+    function updateSpeed() {
+        valSpeed.innerText = "x" + parseFloat(slSpeed.value).toFixed(1);
+    }
+
+    function editValue(type) {
+        if(animId !== null || document.getElementById('btnStart').disabled) return;
+
+        let slider, min, max, currentVal;
+        if(type === 'mass') slider = slMass;
+        else if(type === 'vol') slider = slVol;
+        else if(type === 'conc') slider = slConc;
+        
+        min = parseFloat(slider.min);
+        max = parseFloat(slider.max);
+        currentVal = slider.value;
+
+        let input = prompt(`Entrez une valeur manuelle (${min} - ${max}) :`, currentVal);
+        
+        if (input !== null) {
+            input = input.replace(',', '.');
+            let num = parseFloat(input);
+            
+            if (!isNaN(num) && num >= min && num <= max) {
+                slider.step = 'any';
+                slider.value = num;
+                updateInputs();
+            } else {
+                alert(`Valeur invalide. Veuillez entrer un nombre entre ${min} et ${max}.`);
+            }
+        }
+    }
+
+    function toggleTheory() {
+        theorySection.style.display = chkTheory.checked ? 'flex' : 'none';
+        resBox.style.display = chkTheory.checked ? 'block' : 'none';
+        resizeCanvas(); if (chkTheory.checked) updateTableInitial();
+    }
+
+    function drawSolidPile(mass) {
+        if (mass <= 0.05) { solidPilePath.setAttribute('d', ''); return; }
+        const ratio = mass / 2.0; const h = 25 * ratio; const w = 45 * ratio; 
+        const d = `M${ERLEN_CENTER_X - w},400 Q${ERLEN_CENTER_X},${400 - h*2.2} ${ERLEN_CENTER_X + w},400 Z`;
+        solidPilePath.setAttribute('d', d);
+    }
+
+    function updateInputs() {
+      // Affichage propre : si step est "any", on garde la précision, sinon on a un affichage propre
+      valMass.textContent = parseFloat(slMass.value) + " g"; 
+      valVol.textContent = parseFloat(slVol.value) + " mL"; 
+      valConc.innerHTML = parseFloat(slConc.value) + " mol.L<sup>-1</sup>";
+      
+      if (!animId) {
+          drawSolidPile(parseFloat(slMass.value));
+          updateVisualColor(1.0);
+          if (chkTheory.checked) updateTableInitial();
+      }
+      const v = parseFloat(slVol.value);
+      if (v <= 0) { 
+          erlenLiquidPath.setAttribute('d', ''); 
+          erlenLiquidLocalY = 400; 
+      } else {
+        const hPixels = 5 + (v / 40) * 80; 
+        const ySurface = 400 - hPixels; 
+        const xL = 125 + (ySurface - 400) * (165 - 125) / (280 - 400);
+        const xR = 235 + (ySurface - 400) * (200 - 235) / (280 - 400);
+        const d = `M125,400 L235,400 L${xR},${ySurface} L${xL},${ySurface} Z`;
+        erlenLiquidPath.setAttribute('d', d);
+        erlenLiquidLocalY = ySurface; 
+      }
+    }
+
+    function interpolateColor(c1, c2, t) {
+        return {
+            r: Math.round(c1.r + (c2.r - c1.r) * t),
+            g: Math.round(c1.g + (c2.g - c1.g) * t),
+            b: Math.round(c1.b + (c2.b - c1.b) * t)
+        };
+    }
+
+    function updateVisualColor(visualPH) {
+        let c;
+        if (visualPH <= 6.0) {
+            c = COL_BBT_YELLOW;
+        } else if (visualPH >= 7.6) {
+            c = COL_BBT_BLUE;
+        } else {
+            const t = (visualPH - 6.0) / 1.6;
+            if (t < 0.5) {
+                c = interpolateColor(COL_BBT_YELLOW, COL_BBT_GREEN, t * 2);
+            } else {
+                c = interpolateColor(COL_BBT_GREEN, COL_BBT_BLUE, (t - 0.5) * 2);
+            }
+        }
+        erlenLiquidPath.setAttribute('fill', `rgb(${c.r},${c.g},${c.b})`);
+    }
+
+    function updateTableInitial() {
+        const m = parseFloat(slMass.value); const v = parseFloat(slVol.value); const c = parseFloat(slConc.value);
+        const nS_mmol = (m / M_NAHCO3) * 1000; const nA_mmol = (c * (v/1000)) * 1000;
+        nS_init = nS_mmol; nA_init = nA_mmol;
+        let nS = m / M_NAHCO3; let nA = c * (v/1000); xMax_val = Math.min(nS, nA);
+
+        t_ni_s.textContent = nS_mmol.toFixed(2); t_ni_a.textContent = nA_mmol.toFixed(2);
+        t_nc_s.textContent = nS_mmol.toFixed(2); t_nc_a.textContent = nA_mmol.toFixed(2); t_nc_g.textContent = "0.00"; t_nc_na.textContent = "0.00";
+        rowFinal.classList.remove('show');
+        t_nf_s.textContent = "-"; t_nf_a.textContent = "-"; t_nf_g.textContent = "-"; t_nf_na.textContent = "-";
+        
+        document.getElementById('dispVol').innerText = "0.0 mL";
+        document.getElementById('dispMassRest').innerText = m.toFixed(2) + " g";
+        document.getElementById('dispLim').innerText = "-";
+
+        drawGraph(0);
+    }
+
+    function drawGraph(progress) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!nS_init && nS_init!==0) return;
+
+        const W = canvas.width; const H = canvas.height;
+        const PAD_L = 35; const PAD_B = 20; const PAD_T = 20; const PAD_R = 10;
+        const gW = W - PAD_L - PAD_R; const gH = H - PAD_B - PAD_T;
+
+        ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD_L, PAD_T); ctx.lineTo(PAD_L, H-PAD_B); ctx.lineTo(W-PAD_R, H-PAD_B); ctx.stroke();
+        ctx.fillStyle = '#64748b'; ctx.font = '10px sans-serif';
+        // CORRECTION ICI : 't' changé en 'x'
+        ctx.fillText('x', W-10, H-5);
+        ctx.save(); ctx.translate(10, H/2); ctx.rotate(-Math.PI/2); ctx.fillText('n', 0, 0); ctx.restore();
+
+        const drawLegend = (lbl, col, x, y) => {
+            ctx.fillStyle = col; ctx.fillRect(x, y, 8, 8);
+            ctx.fillStyle = '#475569'; ctx.textAlign = 'left'; ctx.fillText(lbl, x+12, y+7);
+        };
+        drawLegend('NaHCO₃', '#3b82f6', PAD_L + 10, 5);
+        drawLegend('H₃O⁺', '#f59e0b', PAD_L + 70, 5);
+        drawLegend('CO₂', '#10b981', PAD_L + 120, 5);
+
+        const xMax_mmol = xMax_val * 1000;
+        const nMax = Math.max(nS_init, nA_init, xMax_mmol) * 1.1;
+        const x_curr = xMax_mmol * progress;
+
+        const toX = (x) => PAD_L + (x / xMax_mmol) * gW; 
+        const toY = (n) => (H - PAD_B) - (n / nMax) * gH;
+
+        ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.strokeStyle = '#3b82f6'; ctx.beginPath(); ctx.moveTo(toX(0), toY(nS_init)); ctx.lineTo(toX(x_curr), toY(nS_init - x_curr)); ctx.stroke();
+        ctx.strokeStyle = '#f59e0b'; ctx.beginPath(); ctx.moveTo(toX(0), toY(nA_init)); ctx.lineTo(toX(x_curr), toY(nA_init - x_curr)); ctx.stroke();
+        ctx.strokeStyle = '#10b981'; ctx.beginPath(); ctx.moveTo(toX(0), toY(0)); ctx.lineTo(toX(x_curr), toY(x_curr)); ctx.stroke();
+
+        const nS_curr = nS_init - x_curr; const nA_curr = nA_init - x_curr; const nCO2_curr = x_curr;
+        const drawDot = (color, n) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(toX(x_curr), toY(n), 3, 0, 2*Math.PI); ctx.fill(); };
+        drawDot('#3b82f6', nS_curr); drawDot('#f59e0b', nA_curr); drawDot('#10b981', nCO2_curr);
+    }
+
+    updateInputs();
+
+    function resetSim() {
+      if(animId) { cancelAnimationFrame(animId); animId = null; }
+      particles = [];
+      grpBubblesErlen.innerHTML = ''; grpBubblesCyl.innerHTML = '';
+      cylWaterRect.setAttribute('y', CYL_WATER_START_Y); cylWaterRect.setAttribute('height', CYL_WATER_FULL_H);
+      lblGas.textContent = "";
+      
+      document.getElementById('btnStart').disabled = false;
+      chkTheory.disabled = false; lblTheory.classList.remove('disabled');
+      slMass.disabled = false; slVol.disabled = false; slConc.disabled = false;
+      
+      updateInputs(); 
+    }
+
+    function runSim() {
+      resetSim(); 
+      document.getElementById('btnStart').disabled = true;
+      chkTheory.disabled = true; lblTheory.classList.add('disabled');
+      slMass.disabled = true; slVol.disabled = true; slConc.disabled = true;
+      
+      const showTheory = chkTheory.checked;
+      const initialMass = parseFloat(slMass.value); const vAc = parseFloat(slVol.value); const cAc = parseFloat(slConc.value);
+      if (vAc <= 0 || initialMass <= 0.05) { 
+          resetSim(); return; 
+      }
+
+      const nS = initialMass / M_NAHCO3; const nA = cAc * (vAc / 1000);
+      nS_init = nS * 1000; nA_init = nA * 1000;
+      let limitant, finalState = "acid";
+
+      if (nS > nA) finalState = "basic";
+      else if (Math.abs(nS - nA) < 1e-6) finalState = "neutral";
+
+      if (nS < nA) { xMax_val = nS; limitant = "NaHCO₃"; } 
+      else if (nS > nA) { xMax_val = nA; limitant = "H₃O⁺"; } 
+      else { xMax_val = nS; limitant = "Stœchio."; }
+
+      const massConsumedTotal = xMax_val * M_NAHCO3; 
+      const vGasML = xMax_val * VM * 1000;
+      
+      if (showTheory) {
+          document.getElementById('dispLim').innerText = limitant;
+          const nS_final_mmol = (nS - xMax_val) * 1000; const nA_final_mmol = (nA - xMax_val) * 1000; const xMax_mmol = xMax_val * 1000;
+          t_nf_s.textContent = nS_final_mmol.toFixed(2); t_nf_a.textContent = nA_final_mmol.toFixed(2);
+          t_nf_g.textContent = xMax_mmol.toFixed(2); t_nf_na.textContent = xMax_mmol.toFixed(2);
+      }
+
+      const hGasPxTotal = vGasML * (CYL_WATER_FULL_H / 600);
+      
+      currentTime = 0;
+      lastTimestamp = performance.now();
+      const MAX_SIM_TIME = TAU * 5; 
+
+      function step(timestamp) {
+        const realDtMs = timestamp - lastTimestamp;
+        lastTimestamp = timestamp;
+        
+        const speedFactor = parseFloat(slSpeed.value);
+        const dtSec = (realDtMs / 1000) * speedFactor;
+        
+        currentTime += dtSec;
+        let rawP = 1 - Math.exp(-currentTime / TAU);
+        let progress = rawP / (1 - Math.exp(-MAX_SIM_TIME / TAU));
+        
+        if (progress >= 1) progress = 1;
+        
+        const vCurrent = vGasML * progress;
+        const mConsumedCurr = massConsumedTotal * progress;
+        const mRemainingCurr = Math.max(0, initialMass - mConsumedCurr);
+        
+        let visualPH = 1.0; 
+        if (finalState === "acid") {
+             visualPH = 1.0;
+        } else if (finalState === "basic") {
+             if (progress < 0.8) {
+                 visualPH = 1.0 + (progress/0.8)*2;
+             } else {
+                 let t = (progress - 0.8) / 0.2;
+                 visualPH = 3.0 + t * (8.2 - 3.0);
+             }
+        } else {
+             if (progress < 0.8) visualPH = 1.0 + (progress/0.8)*2;
+             else {
+                 let t = (progress - 0.8) / 0.2;
+                 visualPH = 3.0 + t * (7.0 - 3.0);
+             }
+        }
+        
+        updateVisualColor(visualPH);
+
+        if(showTheory) {
+            document.getElementById('dispVol').innerText = vCurrent.toFixed(1) + " mL";
+            document.getElementById('dispMassRest').innerText = mRemainingCurr.toFixed(2) + " g";
+            
+            const x_curr = xMax_val * progress; 
+            const nS_curr_mmol = (nS - x_curr) * 1000; const nA_curr_mmol = (nA - x_curr) * 1000; const x_curr_mmol = x_curr * 1000;
+            t_nc_s.textContent = nS_curr_mmol.toFixed(2); t_nc_a.textContent = nA_curr_mmol.toFixed(2);
+            t_nc_g.textContent = x_curr_mmol.toFixed(2); t_nc_na.textContent = x_curr_mmol.toFixed(2);
+            
+            drawGraph(progress);
+        }
+
+        drawSolidPile(mRemainingCurr);
+
+        const hGasCurrent = hGasPxTotal * progress; const currentWaterY = CYL_WATER_START_Y + hGasCurrent;
+        cylWaterRect.setAttribute('y', currentWaterY); cylWaterRect.setAttribute('height', Math.max(0, CYL_WATER_FULL_H - hGasCurrent));
+        lblGas.textContent = vCurrent.toFixed(0) + " mL"; lblGas.setAttribute('y', 80 + currentWaterY + 20);
+
+        const reactionRate = Math.exp(-currentTime / TAU);
+        const spawnChance = 0.8 * reactionRate * speedFactor; 
+        
+        if (progress < 1 && vGasML > 0.01) {
+          if(Math.random() < spawnChance) spawn(grpBubblesErlen, 125 + Math.random()*110, 400, erlenLiquidLocalY, 'erlen');
+          if(Math.random() < spawnChance) spawn(grpBubblesCyl, 10 + Math.random()*50, 300, currentWaterY, 'cyl');
+        }
+        
+        updateParticles(erlenLiquidLocalY, currentWaterY, speedFactor);
+        
+        if (progress >= 1 && particles.length === 0 && showTheory) rowFinal.classList.add('show');
+        
+        if (progress < 1 || particles.length > 0) {
+            animId = requestAnimationFrame(step);
+        } else {
+            animId = null;
+            document.getElementById('btnStart').disabled = false;
+            chkTheory.disabled = false; lblTheory.classList.remove('disabled');
+            slMass.disabled = false; slVol.disabled = false; slConc.disabled = false;
+        }
+      }
+      animId = requestAnimationFrame(step);
+    }
+
+    function spawn(parent, x, y, limit, type) {
+      let finalX = x;
+      if (type === 'erlen') {
+           finalX = Math.max(130, Math.min(230, x));
+      } else {
+           finalX = Math.max(5, Math.min(65, x)); 
+      }
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      el.setAttribute("cx", finalX); el.setAttribute("cy", y); el.setAttribute("r", 2 + Math.random()*2.5);
+      el.setAttribute("fill", "white"); el.setAttribute("stroke", "#38bdf8"); el.setAttribute("fill-opacity", "0.6");
+      parent.appendChild(el); 
+      particles.push({ el: el, y: y, type: type, baseSpeed: 1.5 + Math.random()*1.5, wobble: Math.random()*6 });
+    }
+    
+    function updateParticles(limitErlen, limitCyl, speedFactor) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; 
+        p.y -= p.baseSpeed * speedFactor; 
+        const dx = Math.sin(p.y * 0.1 + p.wobble) * 0.4; const cx = parseFloat(p.el.getAttribute("cx"));
+        p.el.setAttribute("cx", cx + dx); p.el.setAttribute("cy", p.y);
+        let kill = false; 
+        if (p.type === 'erlen' && p.y <= limitErlen) kill = true; 
+        if (p.type === 'cyl' && p.y <= limitCyl) kill = true;
+        if (kill) { p.el.remove(); particles.splice(i, 1); }
+      }
+    }
+  </script>
+</body>
+</html>

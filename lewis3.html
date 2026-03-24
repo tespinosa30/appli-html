@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atelier Lewis</title>
+    <style>
+        :root {
+            --grid-size: 60px; 
+            --bg-app: #f4f7f6; 
+            --bg-paper: #ffffff;
+            --line-color: #dbe2e8;
+            --panel-color: #ffffff;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --valid-bg: rgba(39, 174, 96, 0.2);
+            --invalid-bg: rgba(192, 57, 43, 0.2);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-app);
+            display: flex; height: 100vh; margin: 0; overflow: hidden;
+            user-select: none; color: #2c3e50;
+        }
+
+        /* CURSEUR PERSONNALISÉ */
+        #custom-cursor {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            display: none;
+            opacity: 0.85;
+        }
+        
+        .cursor-atom {
+            width: 32px; height: 32px; 
+            background: white; border: 2px solid var(--primary-color); 
+            border-radius: 4px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .cursor-bond svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+        .cursor-tool {
+            width: 32px; height: 32px; background: white; border: 1px dashed black; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        /* LAYOUT */
+        #app-left { flex: 1; display: flex; flex-direction: column; position: relative; }
+        #app-sidebar {
+            width: 300px; background: white; border-left: 1px solid #ccc;
+            display: flex; flex-direction: column; padding: 20px;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.05); z-index: 200;
+            position: relative;
+        }
+
+        #credits {
+            position: fixed; bottom: 5px; right: 10px;
+            font-size: 0.75rem; color: #95a5a6; z-index: 1000; pointer-events: none; font-style: italic;
+        }
+
+        /* HEADER */
+        header {
+            background-color: var(--primary-color); color: white;
+            padding: 0 20px; display: flex; justify-content: space-between; align-items: center;
+            height: 50px; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+        .mode-badge { 
+            background: var(--accent-color); padding: 4px 10px; border-radius: 12px; 
+            font-size: 0.8rem; text-transform: uppercase; font-weight: bold;
+        }
+
+        /* BOUTONS HEADER */
+        .header-btn {
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid rgba(255,255,255,0.3); 
+            color: white; 
+            padding: 5px 12px; 
+            border-radius: 4px; 
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .header-btn:hover { background: rgba(255,255,255,0.25); }
+        
+        /* MODAL AIDE */
+        #help-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000;
+            display: none; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; width: 600px; max-width: 90%; max-height: 85vh;
+            border-radius: 8px; padding: 25px; overflow-y: auto;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative;
+        }
+        .modal-close {
+            position: absolute; top: 15px; right: 15px; font-size: 1.5rem;
+            cursor: pointer; color: #999; line-height: 1;
+        }
+        .modal-close:hover { color: #333; }
+        .help-section { margin-bottom: 20px; }
+        .help-section h3 { color: var(--primary-color); border-bottom: 2px solid #eee; padding-bottom: 5px; margin-bottom: 10px; font-size: 1.1rem; }
+        .help-section p { line-height: 1.5; font-size: 0.95rem; color: #444; margin-bottom: 10px; }
+        .help-warning { background: #fff3cd; border-left: 5px solid #ffc107; padding: 10px; font-size: 0.9rem; color: #856404; margin-top: 15px; }
+
+        /* WORKSPACE */
+        #workspace-container {
+            flex: 1; overflow: auto; background-color: var(--bg-app);
+            padding: 20px; display: flex; justify-content: center; align-items: flex-start;
+        }
+        #lewis-grid {
+            background-color: var(--line-color); display: grid; gap: 1px; 
+            border: 1px solid var(--line-color); box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            cursor: default; margin: auto;
+        }
+        #lewis-grid.tool-active { cursor: none; }
+
+        .grid-cell {
+            width: var(--grid-size); height: var(--grid-size); background-color: var(--bg-paper);
+            display: flex; align-items: center; justify-content: center; position: relative;
+            transition: background-color 0.1s;
+        }
+
+        /* CLASSES VISUELLES */
+        .grid-cell.highlight-valid { background-color: var(--valid-bg); }
+        .grid-cell.highlight-invalid { background-color: var(--invalid-bg); }
+        .grid-cell.target-charge { box-shadow: inset 0 0 0 3px var(--accent-color); }
+
+        /* FEEDBACK DIRECTIONNEL POUR DOUBLETS ET LACUNES */
+        .grid-cell.target-lone-top::after, .grid-cell.target-vacancy-top::after { content:''; position:absolute; top:6px; left:50%; transform:translateX(-50%); width:24px; height:4px; background:black; border-radius:2px; pointer-events:none; }
+        .grid-cell.target-lone-bottom::after, .grid-cell.target-vacancy-bottom::after { content:''; position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:24px; height:4px; background:black; border-radius:2px; pointer-events:none; }
+        .grid-cell.target-lone-left::after, .grid-cell.target-vacancy-left::after { content:''; position:absolute; left:6px; top:50%; transform:translateY(-50%); width:4px; height:24px; background:black; border-radius:2px; pointer-events:none; }
+        .grid-cell.target-lone-right::after, .grid-cell.target-vacancy-right::after { content:''; position:absolute; right:6px; top:50%; transform:translateY(-50%); width:4px; height:24px; background:black; border-radius:2px; pointer-events:none; }
+
+        /* Lacune avec contour blanc pour différencier du doublet */
+        .grid-cell.target-vacancy-top::after { background:white !important; border: 2px solid black; }
+        .grid-cell.target-vacancy-bottom::after { background:white !important; border: 2px solid black; }
+        .grid-cell.target-vacancy-left::after { background:white !important; border: 2px solid black; }
+        .grid-cell.target-vacancy-right::after { background:white !important; border: 2px solid black; }
+
+        /* PALETTE BASSE */
+        #bottom-panel {
+            height: 220px; flex-shrink: 0; background-color: var(--panel-color);
+            border-top: 1px solid #bdc3c7; display: flex;
+            padding: 10px; gap: 15px; justify-content: center; overflow-y: auto;
+        }
+        .panel-section { display: flex; flex-direction: column; align-items: center; }
+        .panel-title { font-size: 0.75rem; text-transform: uppercase; color: #7f8c8d; margin-bottom: 5px; font-weight: bold; }
+
+        #periodic-table { display: grid; grid-template-columns: repeat(18, 32px); grid-template-rows: repeat(3, 32px); gap: 2px; }
+        .atom-source {
+            background: white; border: 1px solid #bdc3c7; border-radius: 3px; 
+            display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; font-size: 0.85rem;
+        }
+        .atom-source:hover { background: var(--accent-color); color: white; border-color: var(--primary-color); }
+        
+        .atom-source.selected-tool, .draggable-source.selected-tool {
+            background: var(--primary-color); color: white; border-color: black; 
+            box-shadow: 0 0 0 2px var(--accent-color); transform: scale(1.1);
+        }
+
+        .items-container { display: grid; grid-template-columns: repeat(3, 40px); gap: 6px; }
+        .draggable-source {
+            width: 40px; height: 40px; border: 1px dashed #bdc3c7; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            position: relative;
+        }
+        .draggable-source:hover { border-color: var(--accent-color); background: #f0f8ff; }
+
+        /* SIDEBAR */
+        .sidebar-title { font-size: 1.2rem; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .sidebar-btn {
+            display: block; width: 100%; padding: 12px; margin-bottom: 10px;
+            background: white; border: 2px solid var(--primary-color); color: var(--primary-color);
+            border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; text-align: center;
+        }
+        .sidebar-btn:hover { background: var(--primary-color); color: white; }
+        .sidebar-btn.active { background: var(--primary-color); color: white; }
+
+        #test-panel { display: none; flex-direction: column; gap: 15px; height: 100%; }
+        .test-info-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+        
+        .molecule-target { font-size: 2rem; font-weight: bold; text-align: center; color: var(--accent-color); margin: 10px 0; font-family: 'Georgia', serif; }
+        .molecule-target sub { font-size: 0.6em; } .molecule-target sup { font-size: 0.6em; }
+
+        .score-display { font-size: 1.5rem; font-weight: bold; color: var(--success-color); text-align: center; }
+        .tries-left { font-size: 0.9rem; color: #7f8c8d; text-align: center; margin-bottom: 10px; }
+        
+        .progress-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { height: 100%; background: var(--success-color); width: 0%; transition: width 0.3s; }
+
+        /* CHECKBOX */
+        .checkbox-container { 
+            display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #666;
+            margin: 5px 0;
+        }
+        .checkbox-container input[type="checkbox"] { 
+            width: 18px; height: 18px; cursor: pointer;
+        }
+
+        /* ELEMENTS DESSIN */
+        .placed-item { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+        .placed-atom-text { font-weight: bold; font-size: 1.6rem; z-index: 2; pointer-events: none; }
+        
+        .atom-lone { position: absolute; background: black; border-radius: 2px; z-index: 3; cursor: pointer; }
+        .atom-lone:hover { background: var(--error-color); }
+        .lone-top { top: 8px; left: 50%; transform: translateX(-50%); width: 22px; height: 4px; }
+        .lone-bottom { bottom: 8px; left: 50%; transform: translateX(-50%); width: 22px; height: 4px; }
+        .lone-left { left: 8px; top: 50%; transform: translateY(-50%); width: 4px; height: 22px; }
+        .lone-right { right: 8px; top: 50%; transform: translateY(-50%); width: 4px; height: 22px; }
+
+        /* LACUNE (case vide) */
+        .atom-vacancy { position: absolute; background: white; border: 2px solid black; border-radius: 2px; z-index: 3; cursor: pointer; }
+        .atom-vacancy:hover { background: #ffcccc; }
+        .vacancy-top { top: 8px; left: 50%; transform: translateX(-50%); width: 22px; height: 4px; }
+        .vacancy-bottom { bottom: 8px; left: 50%; transform: translateX(-50%); width: 22px; height: 4px; }
+        .vacancy-left { left: 8px; top: 50%; transform: translateY(-50%); width: 4px; height: 22px; }
+        .vacancy-right { right: 8px; top: 50%; transform: translateY(-50%); width: 4px; height: 22px; }
+
+        .atom-charge {
+            position: absolute; top: -2px; right: -4px; font-size: 1.1rem; font-weight: 900; z-index: 4;
+            background: rgba(255,255,255,0.85); border-radius: 50%; padding: 0 2px; min-width: 16px; text-align: center; line-height: 1;
+        }
+        .charge-pos { color: #e74c3c; } .charge-neg { color: #3498db; }
+        .atom-radical { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; background: black; border-radius: 50%; z-index: 3; }
+
+        .bond-svg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; pointer-events: none; }
+        .bond-line { stroke: black; stroke-width: 3px; stroke-linecap: round; }
+        .icon-lone { width: 20px; height: 4px; background: black; border-radius: 2px; }
+        .icon-vacancy { width: 20px; height: 4px; background: white; border: 2px solid black; border-radius: 2px; }
+        .icon-plus { font-size: 1.5rem; font-weight: bold; color: #e74c3c; } 
+        .icon-minus { font-size: 1.5rem; font-weight: bold; color: #3498db; } 
+        .icon-dot { width: 8px; height: 8px; background: black; border-radius: 50%; }
+
+        #toast-feedback {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000;
+            background: white; padding: 12px 25px; border-radius: 30px; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            font-weight: 500; display: none; border: 1px solid #ddd;
+        }
+        .toast-success { border-left: 6px solid var(--success-color); } 
+        .toast-error { border-left: 6px solid var(--error-color); color: var(--error-color); }
+
+    </style>
+</head>
+<body>
+
+<div id="custom-cursor"></div>
+
+<div id="help-modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="toggleHelp()">&times;</span>
+        <h2 style="margin-top:0; color:#2c3e50;">Aide & Fonctionnement</h2>
+        
+        <div class="help-section">
+            <h3>Comment utiliser l'atelier ?</h3>
+            <p>1. <strong>Sélectionnez un outil</strong> dans la palette du bas (atome, liaison, doublet, charge...).</p>
+            <p>2. <strong>Cliquez sur la grille</strong> pour déposer l'élément. Pour les liaisons, assurez-vous que les cases adjacentes sont libres.</p>
+            <p>3. <strong>Double-cliquez</strong> sur un atome ou un doublet déjà placé pour le supprimer.</p>
+            <p>4. Utilisez le <strong>clic-droit</strong> ou la touche <strong>Échap</strong> pour désélectionner l'outil en cours.</p>
+        </div>
+
+        <div class="help-section">
+            <h3>Règles de validation</h3>
+            <p>L'algorithme de vérification applique les règles classiques de stabilité chimique :</p>
+            <ul>
+                <li>La molécule doit être entièrement connectée (pas d'atomes isolés).</li>
+                <li>Les charges formelles doivent correspondre à la valence de l'atome.</li>
+            </ul>
+
+            <div class="help-warning">
+                <strong>⚠️ IMPORTANT : Règles strictes</strong><br>
+                Cette application vérifie le respect <strong>strict</strong> de la règle du <strong>Duet</strong> (pour H, He, Li...) et de l'<strong>Octet</strong> (8 électrons de valence).<br><br>
+                Certaines molécules usuelles faisant intervenir des éléments de la 3ème période ou plus (comme le soufre dans S₂O₂Cl₂ ou le phosphore dans PCl₅) peuvent être rejetées si elles impliquent une <strong>hypervalence</strong> (plus de 8 électrons), due à la participation des orbitales <em>d</em>. Pour valider ces structures ici, essayez de respecter l'octet en utilisant des charges formelles si possible.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="app-left">
+    <header>
+        <div style="display:flex; align-items:center; gap:15px;">
+            <h1>ATELIER LEWIS</h1>
+            <span id="mode-badge" class="mode-badge">Mode Libre</span>
+        </div>
+        <div id="controls" style="display:flex; gap:10px;">
+            <button onclick="toggleHelp()" class="header-btn" title="Aide et Instructions">
+                ❓ Aide
+            </button>
+            <button onclick="copyMoleculeImage()" class="header-btn" title="Copier l'image de la molécule">
+                📷 Copier Image
+            </button>
+            <button onclick="clearGrid()" class="header-btn">
+                Tout Effacer
+            </button>
+        </div>
+    </header>
+    <div id="toast-feedback"></div>
+    <div id="workspace-container"><div id="lewis-grid"></div></div>
+    <div id="bottom-panel">
+        <div class="panel-section"><div class="panel-title">Atomes</div><div id="periodic-table"></div></div>
+        <div class="panel-section" style="border-left: 1px solid #eee; padding-left: 15px;"><div class="panel-title">Liaisons</div><div class="items-container">
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '1', 'h')" draggable="true" ondragstart="dragStart(event, 'bond', '1', 'h')" title="Simple H"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="0" y1="20" x2="40" y2="20" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '2', 'h')" draggable="true" ondragstart="dragStart(event, 'bond', '2', 'h')" title="Double H"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="0" y1="15" x2="40" y2="15" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="25" x2="40" y2="25" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '3', 'h')" draggable="true" ondragstart="dragStart(event, 'bond', '3', 'h')" title="Triple H"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="0" y1="20" x2="40" y2="20" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="12" x2="40" y2="12" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="0" y1="28" x2="40" y2="28" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '1', 'v')" draggable="true" ondragstart="dragStart(event, 'bond', '1', 'v')" title="Simple V"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="20" y1="0" x2="20" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '2', 'v')" draggable="true" ondragstart="dragStart(event, 'bond', '2', 'v')" title="Double V"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="15" y1="0" x2="15" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="25" y1="0" x2="25" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+                <div class="draggable-source" onclick="selectTool(this, 'bond', '3', 'v')" draggable="true" ondragstart="dragStart(event, 'bond', '3', 'v')" title="Triple V"><svg viewBox="0 0 40 40" width="32" height="32"><line x1="20" y1="0" x2="20" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="12" y1="0" x2="12" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/><line x1="28" y1="0" x2="28" y2="40" stroke="black" stroke-width="3" stroke-linecap="round"/></svg></div>
+            </div></div>
+        <div class="panel-section" style="border-left: 1px solid #eee; padding-left: 15px;"><div class="panel-title">Électrons & Charges</div><div class="items-container" style="grid-template-columns: repeat(2, 40px);">
+                <div class="draggable-source" onclick="selectTool(this, 'lone_tool', '1', '')" draggable="true" ondragstart="dragStart(event, 'lone_tool', '1', '')" title="Doublet non liant"><div class="icon-lone"></div></div>
+                <div class="draggable-source" onclick="selectTool(this, 'vacancy_tool', '1', '')" draggable="true" ondragstart="dragStart(event, 'vacancy_tool', '1', '')" title="Lacune électronique"><div class="icon-vacancy"></div></div>
+                <div class="draggable-source" onclick="selectTool(this, 'radical_tool', '1', '')" draggable="true" ondragstart="dragStart(event, 'radical_tool', '1', '')" title="Radical"><div class="icon-dot"></div></div>
+                <div class="draggable-source" onclick="selectTool(this, 'charge_plus', '1', '')" draggable="true" ondragstart="dragStart(event, 'charge_plus', '1', '')" title="Charge +"><div class="icon-plus">+</div></div>
+                <div class="draggable-source" onclick="selectTool(this, 'charge_minus', '1', '')" draggable="true" ondragstart="dragStart(event, 'charge_minus', '1', '')" title="Charge -"><div class="icon-minus">-</div></div>
+            </div></div>
+    </div>
+</div>
+
+<div id="app-sidebar">
+    <div class="sidebar-title">Menu</div>
+    <button id="btn-free" class="sidebar-btn active" onclick="switchMode('free')">Mode Libre</button>
+    <button id="btn-test" class="sidebar-btn" onclick="switchMode('test')">Test Évalué</button>
+    
+    <div id="free-panel">
+        <p style="font-size:0.9rem; color:#666; margin-top:20px;">Entraînement libre.</p>
+        <button onclick="checkStructureFree()" class="sidebar-btn" style="margin-top:20px; background:var(--success-color); color:white; border:none;">Vérifier la structure de Lewis</button>
+    </div>
+    
+    <div id="test-panel">
+        <input type="file" id="file-input" accept=".txt" style="display:none" onchange="loadTestFile(this)">
+        
+        <div id="test-start-view">
+            <p style="font-size:0.9rem; color:#666;">Choisissez un test :</p>
+            
+            <button onclick="startBuiltInTest()" class="sidebar-btn" style="background:var(--success-color); color:white; border:none;">
+                Test Préconçu (10 molécules)
+            </button>
+            
+            <button onclick="document.getElementById('file-input').click()" class="sidebar-btn" style="background:var(--accent-color); color:white; border:none;">
+                Charger un fichier perso
+            </button>
+            
+            <div class="checkbox-container" style="margin-top:15px;">
+                <input type="checkbox" id="shuffle-checkbox" checked>
+                <label for="shuffle-checkbox">Mélanger l'ordre des molécules</label>
+            </div>
+            
+            <p style="font-size:0.75rem; color:#999; margin-top:15px;">Format fichier : une molécule par ligne. Ions : H3O(+)</p>
+        </div>
+        
+        <div id="test-run-view" style="display:none; flex-direction:column; gap:15px;">
+            <div class="test-info-box">
+                <div style="font-size:0.8rem; color:#7f8c8d; text-align:center;">Molécule :</div>
+                <div id="target-molecule" class="molecule-target">?</div>
+                <div id="tries-display" class="tries-left">Essai 1/3</div>
+            </div>
+            <div class="test-info-box">
+                <div style="font-size:0.8rem; color:#7f8c8d; text-align:center;">Score</div>
+                <div id="current-score" class="score-display">0 / 0</div>
+                <div class="progress-bar"><div id="test-progress" class="progress-fill"></div></div>
+            </div>
+            <button onclick="submitTestAnswer()" class="sidebar-btn" style="background:var(--success-color); color:white; border:none; margin-top:auto;">Valider</button>
+        </div>
+        
+        <div id="test-end-view" style="display:none; text-align:center;">
+            <h2 style="color:var(--primary-color);">Terminé !</h2>
+            <div id="final-score" style="font-size:3rem; font-weight:bold; color:var(--success-color);"></div>
+            <button onclick="location.reload()" class="sidebar-btn" style="margin-top:20px;">Recommencer</button>
+        </div>
+    </div>
+</div>
+<div id="credits">Thierry Espinosa Lycée Albert Einstein</div>
+
+<script>
+    const ROWS = 16, COLS = 24;
+    let currentDragPayload = null;
+    let stickyToolPayload = null; 
+    let isOverGrid = false;
+    let lastClickTime = 0;
+
+    const ATOMS_DB = [ 
+        {sym: 'H', r:1, c:1, val:1, rule:2}, {sym: 'He', r:1, c:18, val:2, rule:2}, 
+        {sym: 'Li', r:2, c:1, val:1, rule:2}, {sym: 'Be', r:2, c:2, val:2, rule:4}, 
+        {sym: 'B', r:2, c:13, val:3, rule:6}, {sym: 'C', r:2, c:14, val:4, rule:8}, 
+        {sym: 'N', r:2, c:15, val:5, rule:8}, {sym: 'O', r:2, c:16, val:6, rule:8}, 
+        {sym: 'F', r:2, c:17, val:7, rule:8}, {sym: 'Ne', r:2, c:18, val:8, rule:8}, 
+        {sym: 'Na', r:3, c:1, val:1, rule:8}, {sym: 'Mg', r:3, c:2, val:2, rule:8}, 
+        {sym: 'Al', r:3, c:13, val:3, rule:8}, {sym: 'Si', r:3, c:14, val:4, rule:8}, 
+        {sym: 'P', r:3, c:15, val:5, rule:8}, {sym: 'S', r:3, c:16, val:6, rule:8}, 
+        {sym: 'Cl', r:3, c:17, val:7, rule:8}, {sym: 'Ar', r:3, c:18, val:8, rule:8} 
+    ];
+    
+    const BUILTIN_TEST = [
+        'H2O', 'CO2', 'C3H8', 'NH3', 'C2H4', 
+        'C3H4O', 'CH5N', 'C2H6O', 'C2H4O2', 'C2H5O2N'
+    ];
+    
+    let gridModel = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+    let testQueue = [], currentQuestionIndex = 0, currentScore = 0, maxScore = 0, tries = 0;
+    const MAX_TRIES = 3;
+
+    function init() {
+        const tableDiv = document.getElementById('periodic-table');
+        ATOMS_DB.forEach(atom => {
+            const el = document.createElement('div');
+            el.className = 'atom-source'; el.textContent = atom.sym; el.draggable = true;
+            el.onclick = () => selectTool(el, 'atom', atom.sym, '');
+            el.ondragstart = (e) => dragStart(e, 'atom', atom.sym, '');
+            el.style.gridColumnStart = atom.c; el.style.gridRowStart = atom.r;
+            tableDiv.appendChild(el);
+        });
+        
+        const gridDiv = document.getElementById('lewis-grid');
+        gridDiv.style.gridTemplateColumns = `repeat(${COLS}, var(--grid-size))`;
+        gridDiv.style.gridTemplateRows = `repeat(${ROWS}, var(--grid-size))`;
+        
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell'; cell.dataset.x = x; cell.dataset.y = y;
+                cell.ondrop = drop; 
+                cell.ondragover = allowDrop; 
+                cell.ondragleave = removeHighlight; 
+                cell.onclick = handleGridClick;
+                cell.onmousemove = handleGridHover;
+                cell.ondblclick = handleDoubleClick;
+                gridDiv.appendChild(cell);
+            }
+        }
+
+        gridDiv.addEventListener('mouseenter', () => { isOverGrid = true; });
+        gridDiv.addEventListener('mouseleave', () => { isOverGrid = false; });
+        
+        document.addEventListener('keydown', (e) => { if(e.key === "Escape") deselectTool(); });
+        document.addEventListener('contextmenu', (e) => { 
+            if(stickyToolPayload) { e.preventDefault(); deselectTool(); } 
+        });
+
+        document.addEventListener('dragend', () => { 
+            currentDragPayload = null; 
+            cleanAllHighlights();
+        });
+
+        document.addEventListener('mousemove', updateCustomCursor);
+    }
+
+    function updateCustomCursor(e) {
+        const cursor = document.getElementById('custom-cursor');
+        if (stickyToolPayload && isOverGrid) {
+            cursor.style.display = 'block';
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+        } else {
+            cursor.style.display = 'none';
+        }
+    }
+    
+    // --- MODAL HELP ---
+    function toggleHelp() {
+        const modal = document.getElementById('help-modal');
+        if(modal.style.display === 'flex') modal.style.display = 'none';
+        else modal.style.display = 'flex';
+    }
+
+    // --- COPY FUNCTION NATIVE ---
+    function copyMoleculeImage() {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        let hasContent = false;
+
+        for(let y=0; y<ROWS; y++) {
+            for(let x=0; x<COLS; x++) {
+                if(gridModel[y][x] !== null) {
+                    hasContent = true;
+                    if(x < minX) minX = x;
+                    if(x > maxX) maxX = x;
+                    if(y < minY) minY = y;
+                    if(y > maxY) maxY = y;
+                }
+            }
+        }
+
+        if(!hasContent) {
+            showToast("⚠️ Grille vide.", true);
+            return;
+        }
+
+        const cellSize = 60; 
+        const margin = 30;
+        const width = (maxX - minX + 1) * cellSize + margin * 2;
+        const height = (maxY - minY + 1) * cellSize + margin * 2;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = "bold 26px 'Segoe UI', sans-serif";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#000000";
+
+        for(let y=minY; y<=maxY; y++) {
+            for(let x=minX; x<=maxX; x++) {
+                const item = gridModel[y][x];
+                if(!item) continue;
+
+                const cx = (x - minX) * cellSize + margin + cellSize/2;
+                const cy = (y - minY) * cellSize + margin + cellSize/2;
+
+                if(item.type === 'atom') {
+                    ctx.fillStyle = "#2c3e50";
+                    ctx.fillText(item.value, cx, cy);
+                    
+                    ctx.fillStyle = "black";
+                    item.lones.forEach(side => {
+                        if(side === 'top') ctx.fillRect(cx - 12, cy - 20, 24, 4);
+                        if(side === 'bottom') ctx.fillRect(cx - 12, cy + 16, 24, 4);
+                        if(side === 'left') ctx.fillRect(cx - 20, cy - 12, 4, 24);
+                        if(side === 'right') ctx.fillRect(cx + 16, cy - 12, 4, 24);
+                    });
+
+                    if(item.vacancies) {
+                        item.vacancies.forEach(side => {
+                            ctx.strokeStyle = "black";
+                            ctx.lineWidth = 2;
+                            if(side === 'top') ctx.strokeRect(cx - 12, cy - 20, 24, 4);
+                            if(side === 'bottom') ctx.strokeRect(cx - 12, cy + 16, 24, 4);
+                            if(side === 'left') ctx.strokeRect(cx - 20, cy - 12, 4, 24);
+                            if(side === 'right') ctx.strokeRect(cx + 16, cy - 12, 4, 24);
+                        });
+                        ctx.lineWidth = 3;
+                    }
+
+                    if(item.radical) {
+                        ctx.fillStyle = "black";
+                        ctx.beginPath();
+                        ctx.arc(cx + 12, cy - 12, 3.5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
+
+                    if(item.charge !== 0) {
+                        ctx.font = "bold 18px sans-serif";
+                        const txt = (Math.abs(item.charge) === 1 ? "" : Math.abs(item.charge)) + (item.charge > 0 ? "+" : "-");
+                        const color = item.charge > 0 ? "#e74c3c" : "#3498db";
+                        
+                        ctx.beginPath();
+                        ctx.arc(cx + 18, cy - 18, 10, 0, 2 * Math.PI);
+                        ctx.fillStyle = "rgba(255,255,255,0.9)";
+                        ctx.fill();
+                        
+                        ctx.fillStyle = color;
+                        ctx.fillText(txt, cx + 18, cy - 18);
+                        
+                        ctx.font = "bold 26px 'Segoe UI', sans-serif";
+                    }
+                } 
+                else if(item.type === 'bond') {
+                    const v = parseInt(item.value);
+                    const isH = (item.orient === 'h');
+                    const len = 60;
+                    
+                    ctx.strokeStyle = "black";
+                    ctx.beginPath();
+                    
+                    if(isH) {
+                        const x1 = cx - len/2 + 8; 
+                        const x2 = cx + len/2 - 8;
+                        if(v === 1) {
+                            ctx.moveTo(x1, cy); ctx.lineTo(x2, cy);
+                        } else if(v === 2) {
+                            ctx.moveTo(x1, cy - 4); ctx.lineTo(x2, cy - 4);
+                            ctx.moveTo(x1, cy + 4); ctx.lineTo(x2, cy + 4);
+                        } else if(v === 3) {
+                            ctx.moveTo(x1, cy); ctx.lineTo(x2, cy);
+                            ctx.moveTo(x1, cy - 6); ctx.lineTo(x2, cy - 6);
+                            ctx.moveTo(x1, cy + 6); ctx.lineTo(x2, cy + 6);
+                        }
+                    } else {
+                        const y1 = cy - len/2 + 8; 
+                        const y2 = cy + len/2 - 8;
+                        if(v === 1) {
+                            ctx.moveTo(cx, y1); ctx.lineTo(cx, y2);
+                        } else if(v === 2) {
+                            ctx.moveTo(cx - 4, y1); ctx.lineTo(cx - 4, y2);
+                            ctx.moveTo(cx + 4, y1); ctx.lineTo(cx + 4, y2);
+                        } else if(v === 3) {
+                            ctx.moveTo(cx, y1); ctx.lineTo(cx, y2);
+                            ctx.moveTo(cx - 6, y1); ctx.lineTo(cx - 6, y2);
+                            ctx.moveTo(cx + 6, y1); ctx.lineTo(cx + 6, y2);
+                        }
+                    }
+                    ctx.stroke();
+                }
+            }
+        }
+
+        canvas.toBlob(blob => {
+            if(blob) {
+                navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]).then(() => {
+                    showToast("📷 Image copiée !", false);
+                }).catch(err => {
+                    console.error(err);
+                    showToast("❌ Erreur presse-papier", true);
+                });
+            }
+        });
+    }
+
+    // --- GESTION OUTIL ACTIF ---
+    function selectTool(el, type, value, orient) {
+        document.querySelectorAll('.selected-tool').forEach(e => e.classList.remove('selected-tool'));
+        el.classList.add('selected-tool');
+        stickyToolPayload = { source: "palette", type: type, value: ""+value, orient: orient, lones: [], vacancies: [], charge:0, radical:false };
+        
+        document.getElementById('lewis-grid').classList.add('tool-active');
+
+        const cursor = document.getElementById('custom-cursor');
+        cursor.innerHTML = ''; 
+        cursor.className = '';
+
+        if (type === 'atom') {
+            const d = document.createElement('div'); d.className = 'cursor-atom'; d.textContent = value; cursor.appendChild(d);
+        } else if (type === 'bond') {
+            const d = document.createElement('div'); d.className = 'cursor-bond';
+            const sourceSvg = el.querySelector('svg'); if(sourceSvg) d.appendChild(sourceSvg.cloneNode(true)); cursor.appendChild(d);
+        } else {
+            const d = document.createElement('div'); d.className = 'cursor-tool';
+            const sourceContent = el.querySelector('div'); if(sourceContent) d.appendChild(sourceContent.cloneNode(true)); cursor.appendChild(d);
+        }
+    }
+
+    function deselectTool() {
+        stickyToolPayload = null;
+        document.querySelectorAll('.selected-tool').forEach(e => e.classList.remove('selected-tool'));
+        document.getElementById('lewis-grid').classList.remove('tool-active');
+        document.getElementById('custom-cursor').style.display = 'none';
+        cleanAllHighlights();
+    }
+
+    // --- LOGIQUE COMMUNE ---
+    function checkAction(payload, cell, ev) {
+        const x = parseInt(cell.dataset.x), y = parseInt(cell.dataset.y);
+        const occupied = (gridModel[y][x] !== null);
+        const data = gridModel[y][x];
+
+        if (payload.type === 'lone_tool' || payload.type === 'vacancy_tool') {
+            if (data && data.type === 'atom') {
+                const side = getMouseSide(ev, cell);
+                if (hasBondOnSide(x, y, side)) return { valid: false, class: 'highlight-invalid' };
+                const cssClass = payload.type === 'lone_tool' ? `target-lone-${side}` : `target-vacancy-${side}`;
+                return { valid: true, class: cssClass };
+            }
+            return { valid: false, class: 'highlight-invalid' };
+        }
+
+        if (payload.type === 'bond') {
+            if (occupied) return { valid: false, class: 'highlight-invalid' };
+            let collision = false;
+            if (payload.orient === 'h') { if (hasLoneOnSide(x-1, y, 'right') || hasLoneOnSide(x+1, y, 'left')) collision = true; } 
+            else { if (hasLoneOnSide(x, y-1, 'bottom') || hasLoneOnSide(x, y+1, 'top')) collision = true; }
+            return collision ? { valid: false, class: 'highlight-invalid' } : { valid: true, class: 'highlight-valid' };
+        }
+
+        if (['radical_tool','charge_plus','charge_minus'].includes(payload.type)) {
+             if (data && data.type === 'atom') return { valid: true, class: 'target-charge' };
+             return { valid: false, class: 'highlight-invalid' };
+        }
+
+        if (payload.type === 'atom') {
+            if (occupied) return { valid: false, class: 'highlight-invalid' };
+            return { valid: true, class: 'highlight-valid' };
+        }
+        return { valid: false };
+    }
+
+    function applyAction(payload, cell, ev) {
+        const x = parseInt(cell.dataset.x), y = parseInt(cell.dataset.y);
+        const targetData = gridModel[y][x];
+
+        if (['lone_tool', 'vacancy_tool', 'radical_tool', 'charge_plus', 'charge_minus'].includes(payload.type)) {
+            if (!targetData || targetData.type !== 'atom') return;
+            
+            if (payload.type === 'lone_tool') {
+                const side = getMouseSide(ev, cell);
+                if (hasBondOnSide(x, y, side)) return; 
+                if (!targetData.lones.includes(side)) targetData.lones.push(side);
+            }
+            else if (payload.type === 'vacancy_tool') {
+                const side = getMouseSide(ev, cell);
+                if (hasBondOnSide(x, y, side)) return;
+                if(!targetData.vacancies) targetData.vacancies = [];
+                if (!targetData.vacancies.includes(side)) targetData.vacancies.push(side);
+            }
+            else if (payload.type === 'radical_tool') { targetData.radical = !targetData.radical; }
+            else if (payload.type === 'charge_plus') { targetData.charge = (targetData.charge || 0) + 1; }
+            else if (payload.type === 'charge_minus') { targetData.charge = (targetData.charge || 0) - 1; }
+            renderCell(x, y);
+            return;
+        }
+
+        if (gridModel[y][x] !== null) return;
+
+        if (payload.type === 'bond') {
+             if (payload.orient === 'h') { if (hasLoneOnSide(x-1, y, 'right') || hasLoneOnSide(x+1, y, 'left')) return; } 
+             else { if (hasLoneOnSide(x, y-1, 'bottom') || hasLoneOnSide(x, y+1, 'top')) return; }
+        }
+
+        if (payload.source === "grid") { 
+            gridModel[payload.srcY][payload.srcX] = null; 
+            renderCell(payload.srcX, payload.srcY); 
+        }
+        
+        if (payload.type === 'atom') {
+            gridModel[y][x] = { type: 'atom', value: payload.value, lones: payload.lones ? [...payload.lones] : [], vacancies: payload.vacancies ? [...payload.vacancies] : [], charge: payload.charge || 0, radical: payload.radical || false };
+        } else if (payload.type === 'bond') {
+            gridModel[y][x] = { type: 'bond', value: payload.value, orient: payload.orient };
+        }
+        renderCell(x, y);
+    }
+
+    // --- EVENTS ---
+    function handleGridClick(ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+
+        // Ne pas agir si on clique sur un doublet/lacune existant
+        if (ev.target.closest('.atom-lone') || ev.target.closest('.atom-vacancy')) return;
+        const now = Date.now();
+        if (now - lastClickTime < 400) return;
+        lastClickTime = now;
+
+        if (!stickyToolPayload) return;
+        const cell = ev.target.closest('.grid-cell');
+        if (!cell) return;
+        
+        const check = checkAction(stickyToolPayload, cell, ev);
+        if (check.valid) {
+            applyAction(stickyToolPayload, cell, ev);
+        }
+    }
+
+    function handleGridHover(ev) {
+        if (!stickyToolPayload) return;
+        if (currentDragPayload) return;
+        const cell = ev.target.closest('.grid-cell');
+        if (!cell) return;
+        cleanAllHighlights();
+        const check = checkAction(stickyToolPayload, cell, ev);
+        if (check.class) {
+            cell.classList.add(check.class);
+        }
+    }
+
+    function dragStart(ev, type, value, orient) {
+        deselectTool();
+        const payload = { source: "palette", type: type, value: ""+value, orient: orient, lones: [], vacancies: [], charge:0, radical:false };
+        currentDragPayload = payload;
+        ev.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    }
+
+    function dragFromGrid(ev, x, y) {
+        deselectTool();
+        const data = gridModel[y][x];
+        if (!data) { ev.preventDefault(); return; }
+        const payload = { source: "grid", srcX: x, srcY: y, ...data };
+        currentDragPayload = payload;
+        ev.dataTransfer.setData("text/plain", JSON.stringify(payload));
+    }
+
+    function allowDrop(ev) {
+        ev.preventDefault();
+        const cell = ev.target.closest('.grid-cell'); if (!cell) return;
+        cleanClasses(cell);
+        const payload = currentDragPayload;
+        if(!payload) return;
+        const check = checkAction(payload, cell, ev);
+        if(check.class) {
+            cell.classList.add(check.class);
+            ev.dataTransfer.dropEffect = check.valid ? "copy" : "none";
+        }
+    }
+
+    function drop(ev) {
+        ev.preventDefault();
+        const cell = ev.target.closest('.grid-cell'); if (!cell) return;
+        cleanClasses(cell);
+        let payload; try { payload = JSON.parse(ev.dataTransfer.getData("text/plain")); } catch(e) { return; }
+        if(!payload || !payload.type) return;
+        applyAction(payload, cell, ev);
+    }
+
+    // --- UTILITAIRES GRILLE ---
+    function getMouseSide(ev, cell) {
+        const rect = cell.getBoundingClientRect();
+        const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+        const w = rect.width, h = rect.height;
+        const distTop=y, distBottom=h-y, distLeft=x, distRight=w-x;
+        const min = Math.min(distTop, distBottom, distLeft, distRight);
+        if (min === distTop) return 'top';
+        if (min === distBottom) return 'bottom';
+        if (min === distLeft) return 'left';
+        return 'right';
+    }
+    
+    function hasBondOnSide(x, y, side) {
+        if(side === 'left') { if(x-1 < 0) return false; const b = gridModel[y][x-1]; return (b && b.type === 'bond' && b.orient === 'h'); }
+        if(side === 'right') { if(x+1 >= COLS) return false; const b = gridModel[y][x+1]; return (b && b.type === 'bond' && b.orient === 'h'); }
+        if(side === 'top') { if(y-1 < 0) return false; const b = gridModel[y-1][x]; return (b && b.type === 'bond' && b.orient === 'v'); }
+        if(side === 'bottom') { if(y+1 >= ROWS) return false; const b = gridModel[y+1][x]; return (b && b.type === 'bond' && b.orient === 'v'); }
+        return false;
+    }
+    
+    function hasBond(x, y, orient) {
+        if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return false;
+        const cell = gridModel[y][x];
+        return (cell && cell.type === 'bond' && cell.orient === orient);
+    }
+
+    function hasLoneOnSide(x, y, side) {
+        if(x<0 || x>=COLS || y<0 || y>=ROWS) return false;
+        const atom = gridModel[y][x];
+        return (atom && atom.type === 'atom' && atom.lones.includes(side));
+    }
+
+    function renderCell(x, y) { 
+        const cell = document.querySelector(`.grid-cell[data-x="${x}"][data-y="${y}"]`); cell.innerHTML = ''; 
+        const data = gridModel[y][x]; if (!data) return; 
+        
+        const itemDiv = document.createElement('div'); itemDiv.className = 'placed-item'; itemDiv.draggable = true; 
+        itemDiv.ondragstart = (e) => dragFromGrid(e, x, y); 
+        
+        if (data.type === 'atom') { 
+            const span = document.createElement('span'); span.className = 'placed-atom-text'; span.textContent = data.value; itemDiv.appendChild(span); 
+            
+            data.lones.forEach(side => { 
+                const d = document.createElement('div'); d.className = `atom-lone lone-${side}`; 
+                d.ondblclick = (e) => { e.stopPropagation(); e.preventDefault(); const atom = gridModel[y][x]; if(atom) atom.lones = atom.lones.filter(s => s !== side); renderCell(x,y); }; 
+                itemDiv.appendChild(d); 
+            });
+
+            if(data.vacancies) {
+                data.vacancies.forEach(side => {
+                    const d = document.createElement('div'); d.className = `atom-vacancy vacancy-${side}`;
+                    d.ondblclick = (e) => { e.stopPropagation(); e.preventDefault(); const atom = gridModel[y][x]; if(atom) atom.vacancies = atom.vacancies.filter(s => s !== side); renderCell(x,y); };
+                    itemDiv.appendChild(d);
+                });
+            }
+            
+            if (data.radical) { const r = document.createElement('div'); r.className = 'atom-radical'; itemDiv.appendChild(r); } 
+            if (data.charge !== 0) { 
+                const c = document.createElement('div'); c.className = `atom-charge ${data.charge > 0 ? 'charge-pos' : 'charge-neg'}`; 
+                let txt = Math.abs(data.charge).toString(); if(txt === '1') txt = ''; txt += (data.charge > 0 ? '+' : '-'); 
+                c.textContent = txt; itemDiv.appendChild(c); 
+            } 
+        } else { 
+            const v = parseInt(data.value), o = data.orient; 
+            const ns = "http://www.w3.org/2000/svg"; const svg = document.createElementNS(ns, "svg"); 
+            svg.setAttribute("class", "bond-svg"); svg.setAttribute("viewBox", "0 0 60 60"); 
+            const pad = 8, size = 60; 
+            if (o === 'h') { 
+                const startX = pad, endX = size - pad, midY = size/2; 
+                if (v===1) createLine(svg, startX, midY, endX, midY); 
+                else if (v===2) { createLine(svg, startX, midY-4, endX, midY-4); createLine(svg, startX, midY+4, endX, midY+4); } 
+                else if (v===3) { createLine(svg, startX, midY, endX, midY); createLine(svg, startX, midY-6, endX, midY-6); createLine(svg, startX, midY+6, endX, midY+6); } 
+            } else { 
+                const startY = pad, endY = size - pad, midX = size/2; 
+                if (v===1) createLine(svg, midX, startY, midX, endY); 
+                else if (v===2) { createLine(svg, midX-4, startY, midX-4, endY); createLine(svg, midX+4, startY, midX+4, endY); } 
+                else if (v===3) { createLine(svg, midX, startY, midX, endY); createLine(svg, midX-6, startY, midX-6, endY); createLine(svg, midX+6, startY, midX+6, endY); } 
+            } 
+            itemDiv.appendChild(svg); 
+        } 
+        cell.appendChild(itemDiv); 
+    }
+
+    function createLine(svg, x1, y1, x2, y2) { 
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line"); 
+        line.setAttribute("x1", x1); line.setAttribute("y1", y1); line.setAttribute("x2", x2); line.setAttribute("y2", y2); 
+        line.setAttribute("class", "bond-line"); 
+        svg.appendChild(line); 
+    }
+
+    function handleDoubleClick(ev) {
+        // Si le dblclick vient d'un doublet ou d'une lacune, leur propre handler gère ça
+        if (ev.target.closest('.atom-lone') || ev.target.closest('.atom-vacancy')) return;
+        const cell = ev.target.closest('.grid-cell');
+        if (!cell) return;
+        const x=parseInt(cell.dataset.x), y=parseInt(cell.dataset.y);
+        if(gridModel[y][x]){ gridModel[y][x]=null; renderCell(x,y); }
+    }
+
+    function cleanClasses(cell) { 
+        cell.classList.remove('highlight-valid','highlight-invalid','target-charge'); 
+        cell.classList.remove('target-lone-top','target-lone-bottom','target-lone-left','target-lone-right');
+        cell.classList.remove('target-vacancy-top','target-vacancy-bottom','target-vacancy-left','target-vacancy-right');
+    }
+
+    function removeHighlight(ev) { 
+        if(ev.relatedTarget && ev.target.contains(ev.relatedTarget)) return; 
+        const cell=ev.target.closest('.grid-cell'); if(cell) cleanClasses(cell); 
+    }
+
+    function cleanAllHighlights() { 
+        document.querySelectorAll('.grid-cell').forEach(c => cleanClasses(c)); 
+    }
+
+    function clearGrid(s=false) { 
+        if(!s && !confirm("Tout effacer ?")) return; 
+        gridModel=Array(ROWS).fill().map(()=>Array(COLS).fill(null)); 
+        document.querySelectorAll('.grid-cell').forEach(c=>{c.innerHTML='';cleanClasses(c);}); 
+        deselectTool(); 
+    }
+
+    // --- VALIDATION (avec lacunes) ---
+    function performLewisCheck(silent) {
+        let atoms = []; 
+        for(let y=0; y<ROWS; y++) { 
+            for(let x=0; x<COLS; x++) { 
+                if(gridModel[y][x] && gridModel[y][x].type === 'atom') { 
+                    atoms.push({x, y, ...gridModel[y][x]}); 
+                } 
+            } 
+        }
+
+        if(atoms.length === 0) return {valid: false, error: "Grille vide"};
+
+        if(atoms.length > 1) { 
+            let visited = new Set(); 
+            let queue = [atoms[0]]; 
+            visited.add(`${atoms[0].x},${atoms[0].y}`); 
+
+            while(queue.length) { 
+                const curr = queue.shift(); 
+                const checks = [ 
+                    {bx:1,by:0,ax:2,ay:0,o:'h'}, 
+                    {bx:-1,by:0,ax:-2,ay:0,o:'h'}, 
+                    {bx:0,by:1,ax:0,ay:2,o:'v'}, 
+                    {bx:0,by:-1,ax:0,ay:-2,o:'v'} 
+                ]; 
+                
+                checks.forEach(c => { 
+                    if(hasBond(curr.x+c.bx, curr.y+c.by, c.o)) { 
+                        const tx = curr.x+c.ax; 
+                        const ty = curr.y+c.ay; 
+                        if(tx>=0 && tx<COLS && ty>=0 && ty<ROWS && gridModel[ty][tx] && gridModel[ty][tx].type==='atom') { 
+                            const k = `${tx},${ty}`; 
+                            if(!visited.has(k)) { 
+                                visited.add(k); 
+                                queue.push({x:tx, y:ty}); 
+                            } 
+                        } 
+                    } 
+                }); 
+            } 
+            if(visited.size !== atoms.length) return {valid: false, error: "Atomes isolés détectés"}; 
+        }
+
+        for(let atom of atoms) { 
+            const atomData = ATOMS_DB.find(a => a.sym === atom.value); 
+            if(!atomData) return {valid:false, error: `Atome inconnu: ${atom.value}`}; 
+
+            let electronsAround = (atom.lones.length * 2) + (atom.radical ? 1 : 0); 
+            let ownedElectrons = (atom.lones.length * 2) + (atom.radical ? 1 : 0); 
+            
+            const checks = [ {dx:1, dy:0, o:'h'}, {dx:-1, dy:0, o:'h'}, {dx:0, dy:1, o:'v'}, {dx:0, dy:-1, o:'v'} ]; 
+            
+            for(let c of checks) { 
+                if(hasBond(atom.x+c.dx, atom.y+c.dy, c.o)) { 
+                    const bondVal = parseInt(gridModel[atom.y+c.dy][atom.x+c.dx].value); 
+                    electronsAround += bondVal * 2; 
+                    ownedElectrons += bondVal * 1; 
+                    
+                    const tx = atom.x + c.dx*2; 
+                    const ty = atom.y + c.dy*2; 
+                    if(!(tx>=0 && tx<COLS && ty>=0 && ty<ROWS && gridModel[ty][tx] && gridModel[ty][tx].type==='atom')) { 
+                        return {valid:false, error:`Liaison orpheline sur ${atom.value}`}; 
+                    } 
+                } 
+            } 
+
+            const calculatedCharge = atomData.val - ownedElectrons; 
+            if (calculatedCharge !== (atom.charge || 0)) { 
+                return {valid: false, error: `${atom.value} : Charge formelle incorrecte.`}; 
+            } 
+
+            let targetRule = atomData.rule; 
+            if (atom.radical && targetRule === 8) targetRule = 7; 
+
+            const numVacancies = atom.vacancies ? atom.vacancies.length : 0;
+            const acceptedRules = [targetRule];
+            if(numVacancies > 0) acceptedRules.push(targetRule - 2 * numVacancies);
+
+            if (atom.value === 'H' && electronsAround !== 2) return {valid: false, error: `H doit avoir 2e-`}; 
+            if (atom.value !== 'H' && !acceptedRules.includes(electronsAround)) {
+                return {valid: false, error: `${atom.value} ne respecte pas l'octet`}; 
+            }
+        } 
+        return {valid: true}; 
+    }
+
+    function checkStructureFree() { 
+        try { 
+            const res = performLewisCheck(false); 
+            if (res.valid) { 
+                showToast("🎉 Valide !", false); 
+            } else { 
+                showToast("⚠️ " + res.error, true); 
+            } 
+        } catch (e) { 
+            console.error(e); 
+            showToast("❌ Erreur technique", true); 
+        } 
+    }
+
+    // --- TEST SYSTEM ---
+    function startBuiltInTest() {
+        const shouldShuffle = document.getElementById('shuffle-checkbox').checked;
+        testQueue = [...BUILTIN_TEST];
+        if(shouldShuffle) {
+            testQueue.sort(() => 0.5 - Math.random());
+        }
+        startTest();
+    }
+
+    function loadTestFile(input) { 
+        const file = input.files[0]; 
+        if (!file) return; 
+        const reader = new FileReader(); 
+        reader.onload = function(e) { 
+            const shouldShuffle = document.getElementById('shuffle-checkbox').checked;
+            testQueue = e.target.result.split(/\r?\n/).filter(l => l.trim().length > 0); 
+            if(shouldShuffle) {
+                testQueue.sort(() => 0.5 - Math.random());
+            }
+            testQueue = testQueue.slice(0, 20);
+            startTest(); 
+        }; 
+        reader.readAsText(file); 
+    }
+    
+    function startTest() { 
+        currentQuestionIndex = 0; 
+        currentScore = 0; 
+        maxScore = testQueue.length * 3; 
+        document.getElementById('test-start-view').style.display = 'none'; 
+        document.getElementById('test-run-view').style.display = 'flex'; 
+        document.getElementById('test-end-view').style.display = 'none'; 
+        loadQuestion(); 
+    }
+    
+    function loadQuestion() { 
+        if (currentQuestionIndex >= testQueue.length) { 
+            endTest(); 
+            return; 
+        } 
+        document.getElementById('target-molecule').innerHTML = formatFormula(testQueue[currentQuestionIndex]); 
+        tries = 0; 
+        updateTestUI(); 
+        clearGrid(true); 
+    }
+    
+    function formatFormula(formula) { 
+        const chargeMatch = formula.match(/\((.+)\)$/); 
+        let mainPart = formula, chargePart = ""; 
+        if (chargeMatch) { 
+            mainPart = formula.substring(0, chargeMatch.index); 
+            chargePart = chargeMatch[1]; 
+        } 
+        let formatted = mainPart.replace(/(\d+)/g, '<sub>$1</sub>'); 
+        if (chargePart) formatted += `<sup>${chargePart}</sup>`; 
+        return formatted; 
+    }
+    
+    function parseFormula(formula) { 
+        let counts = {}; 
+        const cleanFormula = formula.replace(/\(.*\)$/, ''); 
+        const regex = /([A-Z][a-z]*)(\d*)/g; 
+        let match; 
+        while ((match = regex.exec(cleanFormula)) !== null) { 
+            const elem = match[1]; 
+            const num = match[2] ? parseInt(match[2]) : 1; 
+            counts[elem] = (counts[elem] || 0) + num; 
+        } 
+        return counts; 
+    }
+    
+    function getAtomsCount() { 
+        let counts = {}; 
+        for(let y=0; y<ROWS; y++) 
+            for(let x=0; x<COLS; x++) { 
+                if(gridModel[y][x] && gridModel[y][x].type === 'atom') { 
+                    const sym = gridModel[y][x].value; 
+                    counts[sym] = (counts[sym] || 0) + 1; 
+                } 
+            } 
+        return counts; 
+    }
+    
+    function compareComposition(gridCounts, targetCounts) { 
+        const k1 = Object.keys(gridCounts).sort(); 
+        const k2 = Object.keys(targetCounts).sort(); 
+        if (k1.length !== k2.length) return false; 
+        for(let k of k1) if (gridCounts[k] !== targetCounts[k]) return false; 
+        return true; 
+    }
+    
+    function updateTestUI() { 
+        document.getElementById('current-score').innerText = `${currentScore} / ${maxScore}`; 
+        document.getElementById('tries-display').innerText = `Essai ${Math.min(tries+1, MAX_TRIES)} / ${MAX_TRIES}`; 
+        document.getElementById('test-progress').style.width = `${(currentQuestionIndex/testQueue.length)*100}%`; 
+    }
+    
+    function submitTestAnswer() { 
+        const targetMol = testQueue[currentQuestionIndex]; 
+        const lewisCheck = performLewisCheck(true); 
+        const atomsInGrid = getAtomsCount(); 
+        const expectedAtoms = parseFormula(targetMol); 
+        const compositionOK = compareComposition(atomsInGrid, expectedAtoms); 
+        
+        if (lewisCheck.valid && compositionOK) { 
+            const pts = 3 - tries; 
+            currentScore += pts; 
+            updateTestUI(); 
+            showToast(`✅ Correct ! +${pts}`, false); 
+            setTimeout(() => { 
+                currentQuestionIndex++; 
+                loadQuestion(); 
+            }, 1000); 
+        } else { 
+            tries++; 
+            updateTestUI(); 
+            if (tries >= MAX_TRIES) { 
+                showToast(`❌ Raté.`, true); 
+                setTimeout(() => { 
+                    currentQuestionIndex++; 
+                    loadQuestion(); 
+                }, 1000); 
+            } else { 
+                if (!compositionOK) showToast(`❌ Nombre d'atomes incorrect.`, true); 
+                else showToast(`❌ Structure incorrecte. Cherchez encore.`, true); 
+            } 
+        } 
+    }
+    
+    function endTest() { 
+        document.getElementById('test-run-view').style.display = 'none'; 
+        document.getElementById('test-end-view').style.display = 'block'; 
+        document.getElementById('final-score').innerText = `${currentScore} / ${maxScore}`; 
+    }
+    
+    function showToast(msg, isError) { 
+        const t = document.getElementById('toast-feedback'); 
+        t.style.display = 'block'; 
+        t.innerHTML = msg; 
+        t.className = isError ? 'toast-error' : 'toast-success'; 
+        setTimeout(() => t.style.display = 'none', 4000); 
+    }
+    
+    function switchMode(mode) { 
+        document.getElementById('btn-free').className = mode === 'free' ? 'sidebar-btn active' : 'sidebar-btn'; 
+        document.getElementById('btn-test').className = mode === 'test' ? 'sidebar-btn active' : 'sidebar-btn'; 
+        document.getElementById('free-panel').style.display = mode === 'free' ? 'block' : 'none'; 
+        document.getElementById('test-panel').style.display = mode === 'test' ? 'flex' : 'none'; 
+        document.getElementById('mode-badge').innerText = mode === 'free' ? 'Mode Libre' : 'Mode Évaluation'; 
+        document.getElementById('mode-badge').style.background = mode === 'free' ? '#3498db' : '#f39c12'; 
+        
+        if(mode === 'test') { 
+            document.getElementById('test-start-view').style.display = 'block'; 
+            document.getElementById('test-run-view').style.display = 'none'; 
+            document.getElementById('test-end-view').style.display = 'none'; 
+        } 
+        clearGrid(true); 
+    }
+    
+    init();
+</script>
+</body>
+</html>

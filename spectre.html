@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Filtrage Correct (Phase)</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --panel-bg: #ffffff;
+            --primary: #3498db;
+            --input-col: #2ecc71;
+            --output-col: #e74c3c;
+            --time-col: #95a5a6;
+            --border: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0; padding: 0;
+            background-color: var(--bg-color);
+            height: 100vh; display: flex; flex-direction: column;
+        }
+
+        header {
+            background: #2c3e50; color: white;
+            padding: 10px 20px; text-align: center; font-size: 1.1rem;
+        }
+
+        #dashboard {
+            display: flex; flex: 1; flex-direction: row;
+            padding: 10px; gap: 10px; overflow: hidden;
+        }
+
+        .column {
+            flex: 1; background: var(--panel-bg);
+            border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex; flex-direction: column; min-width: 0;
+        }
+
+        .chart-container {
+            flex: 1; position: relative; min-height: 200px;
+        }
+
+        .controls-container {
+            padding: 15px; background: #f8f9fa;
+            border-top: 1px solid var(--border); height: 300px; 
+            overflow-y: auto;
+        }
+
+        h3 { margin: 0 0 10px 0; font-size: 1rem; text-align: center; color: #555; border-bottom: 2px solid transparent;}
+        .col-input h3 { border-color: var(--input-col); }
+        .col-filter h3 { border-color: var(--primary); }
+        .col-output h3 { border-color: var(--output-col); }
+
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 3px; color: #333; }
+        input[type="number"], select, input[type="range"] {
+            width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 8px; box-sizing: border-box;
+        }
+
+        .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .slider-row input { flex: 1; margin: 0; }
+        .val-disp { width: 60px; text-align: right; font-size: 0.8rem; font-weight: bold; color: #555; }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        button {
+            width: 100%; padding: 6px; border: none; border-radius: 4px; 
+            cursor: pointer; font-weight: bold; color: white; font-size: 0.8rem;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+
+        .btn-add { background-color: var(--input-col); margin-top: 5px; font-size: 0.9rem; padding: 8px;}
+        .btn-clear { background-color: #e74c3c; margin-top: 5px;}
+        .btn-preset { background-color: #7f8c8d; }
+
+        .harmonic-list {
+            max-height: 80px; overflow-y: auto; border: 1px solid #eee; 
+            padding: 5px; font-size: 0.8rem; background: white; margin-top: 10px;
+        }
+        .harmonic-item {
+            display: flex; justify-content: space-between; padding: 2px 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .harmonic-item:last-child { border-bottom: none; }
+        .del-harm { color: red; cursor: pointer; font-weight: bold; }
+        .hidden { display: none; }
+
+        /* Crédit discret en bas à droite */
+        .credit {
+            position: fixed;
+            bottom: 8px;
+            right: 12px;
+            font-size: 0.7rem;
+            color: #999;
+            font-family: 'Segoe UI', sans-serif;
+            opacity: 0.6;
+            z-index: 1000;
+        }
+
+        /* Affichage THD en haut à droite des graphiques */
+        .thd-display {
+            position: absolute;
+            top: 35px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #555;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .thd-display .thd-label {
+            color: #888;
+            font-weight: normal;
+            font-size: 0.7rem;
+        }
+        .thd-display .thd-value {
+            color: #e74c3c;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+<header>Simulateur : Filtrage Spectral & Temporel (Phase Corrigée)</header>
+
+<div id="dashboard">
+    <!-- COLONNE 1 : ENTRÉE -->
+    <div class="column col-input">
+        <div class="chart-container" id="plot-input">
+            <div class="thd-display" id="thd-input">
+                <span class="thd-label">THD : </span><span class="thd-value">--</span>
+            </div>
+        </div>
+        <div class="controls-container">
+            <h3>Générateur de Signal</h3>
+            <div style="margin-bottom: 5px; font-weight:bold; font-size:0.85rem; color:#555;">Presets Rapides :</div>
+            <div class="presets-grid">
+                <button class="btn-preset" onclick="setPreset('square')">Carré</button>
+                <button class="btn-preset" onclick="setPreset('triangle')">Triangle</button>
+                <button class="btn-preset" onclick="setPreset('sawtooth')">Dent de Scie</button>
+                <button class="btn-preset" onclick="setPreset('half-rect')">Redressé Simple</button>
+                <button class="btn-preset" onclick="setPreset('full-rect')">Redressé Double</button>
+                <button class="btn-preset" onclick="setPreset('noisy-sin')">Sinus Parasité</button>
+            </div>
+            <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                <label>Ajout Manuel :</label>
+                <div style="display:flex; gap:5px;">
+                    <div style="flex:1"><input type="number" id="new-freq" value="1000" min="0" step="any" placeholder="Freq (0=DC)"></div>
+                    <div style="flex:1"><input type="number" id="new-amp" value="1" step="any" placeholder="Amp"></div>
+                </div>
+                <button class="btn-add" onclick="addHarmonic()">+ Ajouter Composante</button>
+            </div>
+            <div class="harmonic-list" id="harmonics-container"></div>
+            <button class="btn-clear" onclick="clearHarmonics()">Tout effacer</button>
+        </div>
+    </div>
+
+    <!-- COLONNE 2 : FILTRE -->
+    <div class="column col-filter">
+        <div class="chart-container" id="plot-bode"></div>
+        <div class="controls-container">
+            <h3>Réglages Filtre</h3>
+            <label>Type de Filtre</label>
+            <select id="filterType" onchange="updateAll()">
+                <option value="lp1">Passe-Bas (Ordre 1)</option>
+                <option value="hp1">Passe-Haut (Ordre 1)</option>
+                <option value="lp2" selected>Passe-Bas (Ordre 2)</option>
+                <option value="hp2">Passe-Haut (Ordre 2)</option>
+                <option value="bp2">Passe-Bande (Ordre 2)</option>
+            </select>
+            <label>Fréquence de coupure f₀</label>
+            <div class="slider-row">
+                <input type="range" id="f0_slider" min="1.7" max="5" step="0.01" value="3.3" oninput="syncFilterDisplay()">
+                <span class="val-disp" id="f0_disp">2000</span> Hz
+            </div>
+            <div id="q_control">
+                <label>Facteur de Qualité Q</label>
+                <div class="slider-row">
+                    <input type="range" id="q_slider" min="0.1" max="10" step="0.1" value="0.7" oninput="syncFilterDisplay()">
+                    <span class="val-disp" id="q_disp">0.7</span>
+                </div>
+            </div>
+            <label>Gain statique K</label>
+            <div class="slider-row">
+                <input type="number" id="k_val" value="1" step="0.1" oninput="updateAll()" style="margin:0">
+            </div>
+        </div>
+    </div>
+
+    <!-- COLONNE 3 : SORTIE -->
+    <div class="column col-output">
+        <div class="chart-container" id="plot-output">
+            <div class="thd-display" id="thd-output">
+                <span class="thd-label">THD : </span><span class="thd-value">--</span>
+            </div>
+        </div>
+        <div class="controls-container">
+            <h3>Signal de Sortie</h3>
+            <p style="font-size:0.85rem; color:#666; text-align:justify;">
+                La courbe grise montre le signal temporel reconstitué en tenant compte de la phase des harmoniques pour une forme correcte.
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Crédit discret en bas à droite -->
+<div class="credit">Espinosa T. Lycée Albert Einstein</div>
+
+<script>
+    // Données : { f: Hz, a: Amplitude, p: Phase(radians) }
+    let harmonics = [
+        { f: 1000, a: 5, p: 0 },
+    ];
+
+    // --- CALCUL DU TAUX DE DISTORSION HARMONIQUE (THD) ---
+    function calculateTHD(harmonicsData) {
+        // Filtrer les composantes AC (f > 20 Hz) et trier par fréquence
+        let acComponents = harmonicsData.filter(h => h.f > 20).sort((a, b) => a.f - b.f);
+
+        if (acComponents.length === 0) return null;
+
+        // Le fondamental est la plus basse fréquence AC
+        let fundamental = acComponents[0];
+
+        if (acComponents.length === 1) return 0; // Pas d'harmoniques
+
+        // Calculer la somme des carrés des harmoniques (toutes sauf le fondamental)
+        let sumSquares = 0;
+        for (let i = 1; i < acComponents.length; i++) {
+            sumSquares += Math.pow(acComponents[i].a, 2);
+        }
+
+        // THD = sqrt(sum(A_n^2)) / A_1 * 100
+        let thd = Math.sqrt(sumSquares) / fundamental.a * 100;
+        return thd;
+    }
+
+    // --- MOTEUR PRESETS CORRIGÉ (AVEC PHASE) ---
+    function setPreset(type) {
+        harmonics = [];
+        const fBase = 1000; 
+
+        if (type === 'square') {
+            // Carré : somme (1/n)*sin(n*wt) pour n impair
+            for(let i=1; i<=25; i+=2) {
+                let f = fBase * i;
+                if(f > 100000) break;
+                harmonics.push({ f: f, a: (4/Math.PI) * 5.0 / i, p: 0 });
+            }
+        } 
+        else if (type === 'triangle') {
+            // Triangle : somme ((-1)^k / n^2) * sin(n*wt)
+            // Alternance de signe : +, -, +, -
+            // Signe positif -> phase 0, Signe négatif -> phase PI
+            let k = 0;
+            for(let i=1; i<=15; i+=2) {
+                let f = fBase * i;
+                if(f > 100000) break;
+                let amp = (8/(Math.PI*Math.PI)) * 5.0 / (i*i);
+                // Alternance de signe : k=0 (+) -> 0, k=1 (-) -> PI
+                let phase = (k % 2 === 0) ? 0 : Math.PI; 
+                harmonics.push({ f: f, a: amp, p: phase });
+                k++;
+            }
+        }
+        else if (type === 'sawtooth') {
+            // Dent de Scie : somme (1/n)*sin(n*wt)
+            for(let i=1; i<=15; i++) {
+                let f = fBase * i;
+                if(f > 100000) break;
+                harmonics.push({ f: f, a: (2/Math.PI) * 5.0 / i, p: 0 });
+            }
+        }
+        else if (type === 'half-rect') {
+            // Redressé Simple : 1/pi + 1/2 sin(wt) - 2/pi sum( cos(2nwt)/(4n^2-1) )
+            // Cos(x) = Sin(x + PI/2) -> Phase PI/2
+            // Signe moins devant la somme -> Phase PI/2 + PI = 3PI/2 (ou -PI/2)
+
+            // DC
+            harmonics.push({ f: 10, a: 5.0 / Math.PI, p: 0 }); 
+            // Fondamental (sin)
+            harmonics.push({ f: fBase, a: 5.0 / 2, p: 0 }); 
+            // Harmoniques paires (cosinus négatifs)
+            for(let k=1; k<=8; k++) {
+                let n = 2*k;
+                let f = fBase * n;
+                let amp = (2 * 5.0) / (Math.PI * (n*n - 1));
+                if(f > 100000) break;
+                // Terme en -cos(2nwt) = -sin(2nwt + PI/2) = sin(2nwt - PI/2)
+                harmonics.push({ f: f, a: amp, p: -Math.PI/2 });
+            }
+        }
+        else if (type === 'full-rect') {
+            // Redressé Double : 2/pi - 4/pi sum( cos(2nwt)/(4n^2-1) )
+            // DC
+            harmonics.push({ f: 10, a: (2 * 5.0) / Math.PI, p: 0 }); 
+            // Harmoniques paires (cosinus négatifs)
+            for(let k=1; k<=8; k++) {
+                let n = 2*k;
+                let f = fBase * k; // Attention fBase ici est la fréquence d'ondulation (donc le double de la fréquence réseau d'origine)
+                let amp = (4 * 5.0) / (Math.PI * (4*k*k - 1)); 
+                if(f > 100000) break;
+                // Terme en -cos = phase -PI/2
+                harmonics.push({ f: f, a: amp, p: -Math.PI/2 });
+            }
+        }
+        else if (type === 'noisy-sin') {
+            harmonics.push({ f: 1000, a: 5.0, p: 0 });
+            harmonics.push({ f: 15000, a: 1.5, p: Math.random()*6 }); 
+            harmonics.push({ f: 18000, a: 0.8, p: Math.random()*6 }); 
+        }
+
+        updateHarmonicsList();
+        updateAll();
+    }
+
+    // --- MOTEUR PHYSIQUE ---
+
+    function getResponse(type, f, f0, Q, K) {
+        // Retourne { mag: Module, phi: Phase(rad) }
+        let x = f / f0;
+        let mag = 0;
+        let phi = 0;
+
+        switch (type) {
+            case 'lp1': 
+                // H = K / (1 + jx)
+                mag = K / Math.sqrt(1 + x*x);
+                phi = -Math.atan(x);
+                break;
+            case 'hp1': 
+                // H = K(jx) / (1 + jx)
+                mag = (K * x) / Math.sqrt(1 + x*x);
+                phi = (Math.PI/2) - Math.atan(x);
+                break;
+            case 'lp2': 
+                // H = K / (1 - x^2 + j(x/Q))
+                mag = K / Math.sqrt( Math.pow(1 - x*x, 2) + Math.pow(x/Q, 2) );
+                phi = -Math.atan2( (x/Q), (1 - x*x) );
+                break;
+            case 'hp2': 
+                // H = K(-x^2) / ...
+                // Numérateur réel négatif -> Phase PI
+                mag = (K * x * x) / Math.sqrt( Math.pow(1 - x*x, 2) + Math.pow(x/Q, 2) );
+                phi = Math.PI - Math.atan2( (x/Q), (1 - x*x) );
+                break;
+            case 'bp2': 
+                // H = K(j x/Q) / ...
+                // Numérateur imaginaire pur -> Phase PI/2
+                mag = (K * (x/Q)) / Math.sqrt( Math.pow(1 - x*x, 2) + Math.pow(x/Q, 2) );
+                phi = (Math.PI/2) - Math.atan2( (x/Q), (1 - x*x) );
+                break;
+        }
+        return { mag, phi };
+    }
+
+    function syncFilterDisplay() {
+        let logVal = parseFloat(document.getElementById('f0_slider').value);
+        let f0 = Math.pow(10, logVal);
+        document.getElementById('f0_disp').innerText = f0.toFixed(0);
+        let qVal = parseFloat(document.getElementById('q_slider').value);
+        document.getElementById('q_disp').innerText = qVal.toFixed(1);
+        updateAll();
+    }
+
+    function addHarmonic() {
+        let f = parseFloat(document.getElementById('new-freq').value);
+        let a = parseFloat(document.getElementById('new-amp').value);
+        // Modification : permet f=0 pour la composante continue (OFFSET)
+        if(!isNaN(f) && f >= 0 && !isNaN(a) && a) {
+            harmonics.push({ f: f, a: a, p: 0 }); // Phase 0 par défaut pour ajout manuel
+            harmonics.sort((a,b) => a.f - b.f);
+            updateHarmonicsList();
+            updateAll();
+        }
+    }
+
+    function removeHarmonic(index) {
+        harmonics.splice(index, 1);
+        updateHarmonicsList();
+        updateAll();
+    }
+
+    function clearHarmonics() {
+        harmonics = [];
+        updateHarmonicsList();
+        updateAll();
+    }
+
+    function updateHarmonicsList() {
+        const container = document.getElementById('harmonics-container');
+        container.innerHTML = "";
+        harmonics.forEach((h, i) => {
+            let div = document.createElement('div');
+            div.className = 'harmonic-item';
+            let freqLabel = h.f === 0 ? 'DC (Offset)' : h.f.toFixed(0) + ' Hz';
+            div.innerHTML = `<span>${freqLabel} : ${h.a.toFixed(2)} V</span> <span class="del-harm" onclick="removeHarmonic(${i})">×</span>`;
+            container.appendChild(div);
+        });
+    }
+
+    function updateAll() {
+        const type = document.getElementById('filterType').value;
+        const f0_log = parseFloat(document.getElementById('f0_slider').value);
+        const f0 = Math.pow(10, f0_log);
+        const Q = parseFloat(document.getElementById('q_slider').value);
+        const K = parseFloat(document.getElementById('k_val').value);
+
+        document.getElementById('q_control').classList.toggle('hidden', type.endsWith('1'));
+
+        // BODE
+        let bodeX = [], bodeY = [];
+        for (let i = 0; i <= 300; i++) {
+            let logF = 1.7 + (5.0 - 1.7) * (i / 300);
+            let f = Math.pow(10, logF);
+            let resp = getResponse(type, f, f0, Q, K); // On récupère mag et phi
+            let dB = resp.mag > 0.00001 ? 20 * Math.log10(resp.mag) : -100;
+            bodeX.push(f);
+            bodeY.push(dB);
+        }
+
+        // SPECTRES & TEMPOREL
+        let inputPointsX = [], inputPointsY = [], inputShapes = [];
+        let outputPointsX = [], outputPointsY = [], outputShapes = [];
+        let markersX = [], markersY = [];
+
+        // Pour le calcul du THD de sortie
+        let outputHarmonics = [];
+
+        // Temps : On calibre sur le fondamental pour afficher 2 périodes
+        let f_disp = 1000; 
+        let fund = harmonics.find(h => h.f > 50);
+        if(fund) f_disp = fund.f;
+
+        let timeMax = 2 / f_disp; 
+        let timeSteps = 400;
+        let timeX = [], timeY_in = [], timeY_out = [];
+
+        for(let i=0; i<=timeSteps; i++) {
+            timeX.push(i * timeMax / timeSteps);
+            timeY_in.push(0);
+            timeY_out.push(0);
+        }
+
+        harmonics.forEach(h => {
+            // Spectre IN (ne pas afficher DC à 0 Hz sur échelle log)
+            if(h.f > 0) {
+                inputPointsX.push(h.f); inputPointsY.push(h.a);
+                inputShapes.push({ type: 'line', x0: h.f, x1: h.f, y0: 0, y1: h.a, line: { color: '#2ecc71', width: 3 } });
+            }
+
+            // Calcul Réponse Filtre (Module ET Phase)
+            let resp = getResponse(type, h.f, f0, Q, K);
+            let outAmp = h.a * resp.mag;
+            let outPhase = h.p + resp.phi; // La phase de sortie = phase entrée + déphasage filtre
+
+            // Stocker pour le calcul du THD de sortie
+            outputHarmonics.push({ f: h.f, a: outAmp, p: outPhase });
+
+            // Spectre OUT (ne pas afficher DC sur échelle log)
+            if(h.f > 0) {
+                outputPointsX.push(h.f); outputPointsY.push(outAmp);
+                outputShapes.push({ type: 'line', x0: h.f, x1: h.f, y0: 0, y1: outAmp, line: { color: '#e74c3c', width: 3 } });
+
+                // Marqueurs Bode
+                let dbVal = resp.mag > 0.00001 ? 20*Math.log10(resp.mag) : -100;
+                markersX.push(h.f); markersY.push(dbVal);
+            }
+
+            // Sommation Temporelle (AVEC PHASE)
+            // Cas particulier DC (f=0 ou très faible)
+            if(h.f < 20) {
+                 for(let i=0; i<=timeSteps; i++) {
+                    timeY_in[i] += h.a; 
+                    timeY_out[i] += outAmp;
+                }
+            } else {
+                let omega = 2 * Math.PI * h.f;
+                for(let i=0; i<=timeSteps; i++) {
+                    let t = timeX[i];
+                    timeY_in[i]  += h.a * Math.sin(omega * t + h.p); // Phase source
+                    timeY_out[i] += outAmp * Math.sin(omega * t + outPhase); // Phase source + filtre
+                }
+            }
+        });
+
+        // Calcul et affichage du THD
+        let thdInput = calculateTHD(harmonics);
+        let thdOutput = calculateTHD(outputHarmonics);
+
+        document.querySelector('#thd-input .thd-value').textContent = 
+            thdInput !== null ? thdInput.toFixed(2) + ' %' : '--';
+        document.querySelector('#thd-output .thd-value').textContent = 
+            thdOutput !== null ? thdOutput.toFixed(2) + ' %' : '--';
+
+        const commonLayout = {
+            margin: { l: 40, r: 10, t: 30, b: 40 },
+            showlegend: false,
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'white',
+            xaxis: { type: 'log', range: [1.7, 5.0], title: 'Fréquence (Hz)', showgrid: true },
+            xaxis2: { overlaying: 'x', showgrid: false, showticklabels: false, zeroline:false }, 
+            yaxis2: { overlaying: 'y', side: 'right', range: [-10, 10], showgrid: false, showticklabels: false, zeroline: true, zerolinecolor: '#eee'} 
+        };
+
+        Plotly.react('plot-input', [
+            { x: inputPointsX, y: inputPointsY, type: 'scatter', mode: 'markers', marker: { color: '#2ecc71', size: 8 }, name: 'Spectre', hoverinfo: 'x+y' },
+            { x: timeX, y: timeY_in, xaxis: 'x2', yaxis: 'y2', type: 'scatter', mode: 'lines', line: { color: '#95a5a6', width: 2 }, hoverinfo: 'skip', opacity: 0.6 }
+        ], { ...commonLayout, title: 'Spectre Entrée + Temporel', yaxis: { title: 'Amplitude (V)', range: [0, 10] }, shapes: inputShapes }, {responsive: true, displayModeBar: false});
+
+        Plotly.react('plot-bode', [
+            { x: bodeX, y: bodeY, type: 'scatter', mode: 'lines', line: { color: '#3498db', width: 2 }, name: 'Filtre' },
+            { x: markersX, y: markersY, type: 'scatter', mode: 'markers', marker: { color: '#e74c3c', size: 8, symbol: 'circle-open', line: {width:2} }, name: 'Harmoniques' }
+        ], { ...commonLayout, title: 'Filtre (Gain dB)', yaxis: { title: 'Gain (dB)', range: [-60, 20] }, shapes: [{ type: 'line', x0: f0, x1: f0, y0: -60, y1: 20, line: {dash:'dot', color:'#aaa'} }] }, {responsive: true, displayModeBar: false});
+
+        Plotly.react('plot-output', [
+            { x: outputPointsX, y: outputPointsY, type: 'scatter', mode: 'markers', marker: { color: '#e74c3c', size: 8 }, name: 'Spectre', hoverinfo: 'x+y' },
+            { x: timeX, y: timeY_out, xaxis: 'x2', yaxis: 'y2', type: 'scatter', mode: 'lines', line: { color: '#95a5a6', width: 2 }, hoverinfo: 'skip', opacity: 0.6 }
+        ], { ...commonLayout, title: 'Spectre Sortie + Temporel', yaxis: { title: 'Amplitude (V)', range: [0, 10] }, shapes: outputShapes }, {responsive: true, displayModeBar: false});
+    }
+
+    window.onload = () => { syncFilterDisplay(); updateHarmonicsList(); };
+    window.onresize = () => { Plotly.Plots.resize('plot-input'); Plotly.Plots.resize('plot-bode'); Plotly.Plots.resize('plot-output'); }
+
+</script>
+</body>
+</html>

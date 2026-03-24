@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Interférences de Young - Labo Final</title>
+    
+    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        
+        #container-3d { position: relative; flex: 1; width: 100%; min-height: 0; overflow: hidden; }
+
+        #container-instruments {
+            height: 200px;
+            width: 100%; background: #080808;
+            border-top: 2px solid #444; position: relative; z-index: 20;
+            display: flex; flex-shrink: 0;
+        }
+        
+        #box-oscillo {
+            flex: 0 0 20%; min-width: 250px; position: relative;
+            border-right: 2px solid #333; background: #050505;
+        }
+        #box-screen {
+            flex: 1; position: relative; background: #000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        
+        #box-formula {
+            flex: 0 0 25%; min-width: 320px; position: relative;
+            border-left: 2px solid #333; background: #1a1a1a;
+            color: #ecf0f1; padding: 10px;
+            display: flex; flex-direction: column; justify-content: center;
+            font-size: 0.85em;
+            overflow: hidden;
+        }
+
+        .instrument-label {
+            position: absolute; top: 5px; left: 10px;
+            font-size: 0.7em; color: #888; font-weight: bold; text-transform: uppercase;
+            pointer-events: none; z-index: 5;
+        }
+
+        #scope-canvas, #fringe-canvas { display: block; width: 100%; height: 100%; }
+
+        #sidebar {
+            position: absolute; top: 0; left: 0; bottom: 0; width: 320px;
+            background: rgba(30, 30, 30, 0.95); color: #ecf0f1;
+            border-right: 1px solid #555; padding: 20px;
+            display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5); z-index: 10;
+            overflow-y: auto;
+        }
+
+        h1 { margin: 0; color: #3498db; font-size: 1.4em; border-bottom: 2px solid #34495e; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 2px;}
+        h2 { margin: 0; color: #bdc3c7; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; margin-bottom: 8px;}
+
+        .control-group { background: #2c3e50; padding: 15px; border-radius: 6px; border: 1px solid #455a64; }
+        .slider-label { display: flex; justify-content: space-between; color: #ecf0f1; font-size: 0.9em; margin-bottom: 5px; font-weight: 500; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3498db; margin-bottom: 5px; background: #555; }
+        input[type=checkbox] { accent-color: #3498db; transform: scale(1.2); margin-right: 10px; }
+        .val { font-family: monospace; color: #f1c40f; font-weight: bold; }
+        
+        .rainbow-slider {
+            -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px;
+            background: linear-gradient(to right, #9b00ff, #0000ff, #00ff00, #ffff00, #ff7f00, #ff0000);
+            outline: none;
+        }
+        .rainbow-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; 
+            background: #fff; border: 2px solid #555; cursor: pointer; box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        
+        .formula-row { display: flex; align-items: center; margin-bottom: 4px; font-size: 1.1em; }
+        .formula-label { width: 40px; font-weight: bold; color: #3498db; }
+        .formula-val { font-family: monospace; color: #f1c40f; margin-left: 10px; }
+        .main-formula { font-size: 1.2em; text-align: center; margin-bottom: 8px; color: #fff; font-weight: bold; background: #222; padding: 6px; border-radius: 4px; }
+        
+        .btn-toggle {
+            width: 100%; padding: 10px; background: #34495e; color: white; 
+            border: none; border-radius: 4px; cursor: pointer; 
+            font-weight: bold; transition: background 0.2s;
+            text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px;
+        }
+        .btn-toggle:hover { background: #2c3e50; }
+        .btn-toggle.active { background: #e67e22; color: #fff; }
+        .btn-toggle.disabled-look { background: #555; color: #aaa; cursor: not-allowed; }
+
+        .credits {
+            margin-top: auto; padding-top: 20px;
+            font-size: 0.75em; color: #7f8c8d; text-align: center;
+            border-top: 1px solid #444; font-style: italic;
+        }
+
+        .switch-container { display: flex; justify-content: space-between; margin-top: 10px; margin-bottom: 5px; }
+        .switch-item { display: flex; align-items: center; font-size: 0.9em; color: #ddd; }
+        .switch-color { width: 10px; height: 10px; display: inline-block; margin-right: 5px; border-radius: 50%; }
+
+        .order-section { margin-top: 10px; padding-top: 5px; border-top: 1px solid #444; }
+        .order-status { font-size: 0.9em; text-align: right; margin-left: auto; font-weight: bold; }
+        .status-constructive { color: #2ecc71; }
+        .status-destructive { color: #e74c3c; }
+        .status-neutral { color: #95a5a6; }
+
+    </style>
+</head>
+<body>
+
+    <div id="container-3d">
+        <div id="sidebar">
+            <h1>Interférences</h1>
+
+            <div class="control-group">
+                <h2>Source Lumineuse</h2>
+                <div class="slider-label" style="margin-top:10px"><span>Longueur d'onde (λ)</span> <span id="val-lambda" class="val" style="color:#fff">485 nm</span></div>
+                <input type="range" class="rainbow-slider" min="400" max="700" step="1" value="485" oninput="updateLambda(this.value)">
+                <div class="slider-label" style="margin-top:10px"><span>Intensité</span> <span id="val-amp" class="val">2.5</span></div>
+                <input type="range" min="0" max="5.0" step="0.1" value="2.5" oninput="updateAmp(this.value)">
+            </div>
+
+            <div class="control-group">
+                <h2>Géométrie</h2>
+                <div class="slider-label"><span>Position Mur (x)</span> <span id="val-wall" class="val">25</span></div>
+                <input type="range" min="-20" max="60" step="1" value="25" oninput="updateWallPos(this.value)">
+                
+                <div class="slider-label" style="margin-top:10px"><span>Écartement (a)</span> <span id="val-gap" class="val">30</span></div>
+                <input type="range" min="15" max="80" step="1" value="30" oninput="updateGap(this.value)">
+
+                <!-- CONTROLES FENTES -->
+                <div style="border-top: 1px solid #555; margin-top: 15px; padding-top: 10px;">
+                    <div class="switch-container">
+                        <div class="switch-item">
+                            <input type="checkbox" id="chk-s1" checked onchange="updateSlits()">
+                            <span class="switch-color" style="background:cyan; margin-left:5px;"></span>Fente 1
+                        </div>
+                        <div class="switch-item">
+                            <input type="checkbox" id="chk-s2" checked onchange="updateSlits()">
+                            <span class="switch-color" style="background:magenta; margin-left:5px;"></span>Fente 2
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px; margin-bottom:10px; display:flex; align-items:center; color:#ccc; border-top:1px solid #555; padding-top:10px;">
+                    <input type="checkbox" id="check-diff" onchange="updateDiffraction(this.checked)">
+                    <label for="check-diff" style="cursor:pointer; font-size:0.9em; font-weight:bold; color:#3498db;">Activer Diffraction</label>
+                </div>
+
+                <div id="control-slit-width" class="hidden-control" style="display:none;">
+                    <div class="slider-label"><span>Largeur Fente (b)</span> <span id="val-width" class="val">2.0</span></div>
+                    <input type="range" id="input-width" min="2" max="25" step="0.5" value="2.0" oninput="updateSlitWidth(this.value)">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h2>Légende</h2> 
+                <button id="btn-show-measure" class="btn-toggle active" onclick="toggleMeasures()">Cacher Légende</button>
+            </div>
+
+            <div class="control-group">
+                <h2>Simulation & Vue</h2>
+                <div class="slider-label"><span>Vitesse Animation</span> <span id="val-speed" class="val">1.0x</span></div>
+                <input type="range" min="0" max="3" step="0.1" value="1.0" oninput="updateTimeScale(this.value)">
+
+                <div class="slider-label" style="margin-top:10px"><span>Luminosité Fond</span></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.1" oninput="updateBgBrightness(this.value)">
+                
+                <!-- CONTROLE PLAN -->
+                <div style="margin-top:10px; margin-bottom:5px; display:flex; align-items:center;">
+                     <input type="checkbox" id="check-plane" checked onchange="togglePlane(this.checked)">
+                     <label for="check-plane" style="cursor:pointer; font-size:0.9em; color:#ecf0f1;">Afficher le plan</label>
+                </div>
+
+                <div class="slider-label"><span>Luminosité du plan</span></div>
+                <input type="range" min="0" max="1" step="0.01" value="0.2" oninput="updatePlaneBrightness(this.value)">
+            </div>
+
+            <div class="credits">
+                Espinosa T. <br> Lycée Albert Einstein
+            </div>
+        </div>
+    </div>
+
+    <div id="container-instruments">
+        <div id="box-oscillo">
+            <div class="instrument-label">Oscilloscope (Zoomé)</div>
+            <canvas id="scope-canvas"></canvas>
+        </div>
+        <div id="box-screen">
+            <div class="instrument-label">Figure d'Interférence (Vue Écran)</div>
+            <canvas id="fringe-canvas"></canvas>
+        </div>
+        <div id="box-formula">
+            <div class="instrument-label">Données & Mesures</div>
+            <div class="main-formula">i = (λ · D) / a</div>
+            <div class="formula-row"><span class="formula-label">λ</span> = <span id="f-lambda" class="formula-val">485 nm</span></div>
+            <div class="formula-row"><span class="formula-label">D</span> = <span id="f-D" class="formula-val">10.0 m</span></div>
+            <div class="formula-row"><span class="formula-label">a</span> = <span id="f-a" class="formula-val">3.0 mm</span></div>
+            <div class="formula-row"><span class="formula-label">i</span> = <span id="f-i" class="formula-val" style="color:#2ecc71;">1.62 mm</span></div>
+            
+            <div class="order-section">
+                <div style="font-size:0.75em; color:#888; text-transform:uppercase; font-weight:bold; margin-bottom:5px;">Sonde (Ordre p = δ/λ)</div>
+                <div class="formula-row">
+                    <span class="formula-label">p</span> = <span id="f-p" class="formula-val" style="color:#ff00ff; font-weight:bold;">0.00</span>
+                    <span id="f-status" class="order-status status-constructive">Constructive</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+    window.onload = function() {
+
+        // --- CONSTANTES ---
+        const GRID_SIZE = 240;
+        const SEGMENTS = 200; 
+        const SCREEN_POS_X = -GRID_SIZE/2 + 10;
+        
+        let params = {
+            c: 40.0, lambdaNm: 485, freq: 4.5, amp: 2.5,
+            gap: 30.0, slitWidth: 2.0, wallX: 25.0,
+            timeScale: 1.0, diffraction: false,
+            detectorX: -40.0, detectorZ: 0.0,
+            bgBrightness: 0.1, planeBrightness: 0.2,
+            openS1: true, openS2: true,
+            showPlane: true 
+        };
+
+        let showMeasures = true;
+        let simTime = 0;
+        let currentColor = new THREE.Color();
+
+        // --- HELPER FUNCTIONS ---
+        function wavelengthToColor(wavelength) {
+            let r, g, b;
+            if (wavelength >= 380 && wavelength < 440) { r = -1 * (wavelength - 440) / (440 - 380); g = 0; b = 1; }
+            else if (wavelength >= 440 && wavelength < 490) { r = 0; g = (wavelength - 440) / (490 - 440); b = 1; }
+            else if (wavelength >= 490 && wavelength < 510) { r = 0; g = 1; b = -1 * (wavelength - 510) / (510 - 490); }
+            else if (wavelength >= 510 && wavelength < 580) { r = (wavelength - 510) / (580 - 510); g = 1; b = 0; }
+            else if (wavelength >= 580 && wavelength < 645) { r = 1; g = -1 * (wavelength - 645) / (645 - 580); b = 0; }
+            else if (wavelength >= 645 && wavelength <= 780) { r = 1; g = 0; b = 0; }
+            else { r = 0; g = 0; b = 0; }
+            return new THREE.Color(r, g, b);
+        }
+
+        function updateFreqFromLambda() {
+            const t = (params.lambdaNm - 400) / (700 - 400); 
+            params.freq = 6- t * 3.0; 
+            currentColor = wavelengthToColor(params.lambdaNm);
+        }
+        updateFreqFromLambda();
+
+        function createZebraTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64; 
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 64, 32);
+            const grd = ctx.createLinearGradient(0, 32, 0, 64);
+            grd.addColorStop(0, '#000'); grd.addColorStop(0.2, '#fff'); grd.addColorStop(0.8, '#fff'); grd.addColorStop(1, '#000');
+            ctx.fillStyle = grd; ctx.fillRect(0, 32, 64, 32); 
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; 
+            return tex;
+        }
+
+        function createMagentaTexture() {
+             const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64; 
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ff00ff'; ctx.fillRect(0, 0, 64, 32);
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 32, 64, 32); 
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; 
+            tex.minFilter = THREE.NearestFilter; tex.magFilter = THREE.NearestFilter;
+            return tex;
+        }
+        
+        function createTextSprite(text, color) {
+            const canvas = document.createElement('canvas');
+            const size = 512; 
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.font = 'bold 300px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = "rgba(0,0,0,0.8)";
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 4;
+            ctx.fillText(text, size/2, size/2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(12, 12, 1.0);
+            return sprite;
+        }
+
+
+        // --- INIT THREE JS ---
+        const container3D = document.getElementById('container-3d');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a); 
+        scene.fog = new THREE.Fog(0x1a1a1a, 200, 600);
+
+        const camera = new THREE.PerspectiveCamera(45, container3D.clientWidth / container3D.clientHeight, 1, 1000);
+        camera.position.set(0, 240, -160); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Alpha true pour gérer transparence
+        renderer.setSize(container3D.clientWidth, container3D.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container3D.appendChild(renderer.domElement);
+
+        let controls;
+        try {
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enablePan = false; 
+            controls.maxPolarAngle = Math.PI / 2 - 0.1;
+        } catch(e) {
+            console.error("OrbitControls failed to load", e);
+        }
+
+        const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+        sun.position.set(50, 150, 50); scene.add(sun);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight); 
+
+        // --- OBJETS ---
+        const rulerTexture = createZebraTexture();
+        const deltaTexture = createMagentaTexture();
+
+        const geo = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE, SEGMENTS, SEGMENTS);
+        geo.rotateX(-Math.PI / 2);
+        const mat = new THREE.MeshPhongMaterial({ 
+            color: 0x34495e, 
+            specular: 0x111111, 
+            shininess: 30, 
+            side: THREE.DoubleSide, 
+            vertexColors: true, 
+            transparent: true, 
+            opacity: 1.0 
+        });
+        const water = new THREE.Mesh(geo, mat);
+        scene.add(water);
+        
+        const colors = new Float32Array(geo.attributes.position.count * 3);
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
+        const wallGroup = new THREE.Group();
+        const wTop = new THREE.Mesh(new THREE.BoxGeometry(4, 15, 120), wallMat);
+        const wBot = new THREE.Mesh(new THREE.BoxGeometry(4, 15, 120), wallMat);
+        const wMid = new THREE.Mesh(new THREE.BoxGeometry(4, 15, 10), wallMat);
+        
+        // Bouchons pour les fentes
+        const plugMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.3 });
+        const plug1 = new THREE.Mesh(new THREE.BoxGeometry(5, 12, 1), plugMat);
+        const plug2 = new THREE.Mesh(new THREE.BoxGeometry(5, 12, 1), plugMat);
+        plug1.visible = false; 
+        plug2.visible = false;
+        
+        wallGroup.add(wTop, wBot, wMid, plug1, plug2);
+        scene.add(wallGroup);
+
+        // --- SUPPRESSION DU BLOC LASER (ARTEFACT) ---
+        // Anciennement: const laserSource = ...; scene.add(laserSource);
+        // Le bloc est supprimé pour éviter l'artefact bleu.
+        
+        const detectScreen = new THREE.Mesh(new THREE.BoxGeometry(2, 40, GRID_SIZE), new THREE.MeshPhongMaterial({ color: 0x555555, opacity: 0.3, transparent: true }));
+        detectScreen.position.set(SCREEN_POS_X, 20, 0);
+        scene.add(detectScreen);
+
+        const graphPoints = [];
+        const graphRes = 250; 
+        for(let i=0; i<=graphRes; i++) graphPoints.push(new THREE.Vector3(0,0,0));
+        const intensityLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(graphPoints), new THREE.LineBasicMaterial({ color: currentColor, linewidth: 2 }));
+        detectScreen.add(intensityLine);
+
+        const rayGeo = new THREE.CylinderGeometry(0.8, 0.8, 1, 16, 1, true); 
+        rayGeo.rotateX(Math.PI / 2); rayGeo.translate(0, 0, 0.5); 
+        const rayMat = new THREE.MeshBasicMaterial({ map: rulerTexture, color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const ray1Mesh = new THREE.Mesh(rayGeo, rayMat.clone());
+        const ray2Mesh = new THREE.Mesh(rayGeo, rayMat.clone());
+        ray1Mesh.material.map = rulerTexture.clone(); ray2Mesh.material.map = rulerTexture.clone();
+        scene.add(ray1Mesh); scene.add(ray2Mesh);
+
+        const deltaGeo = new THREE.CylinderGeometry(1.2, 1.2, 1, 16, 1, true); 
+        deltaGeo.rotateX(Math.PI / 2); deltaGeo.translate(0, 0, 0.5); 
+        const deltaMat = new THREE.MeshBasicMaterial({ map: deltaTexture, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const deltaMesh = new THREE.Mesh(deltaGeo, deltaMat);
+        scene.add(deltaMesh);
+
+        const detectorGroup = new THREE.Group();
+        const probeBody = new THREE.Mesh(new THREE.CylinderGeometry(2, 3, 6, 16), new THREE.MeshStandardMaterial({ color: 0x7f8c8d }));
+        probeBody.position.y = 3;
+        const probeSensor = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xf1c40f }));
+        probeSensor.position.y = 7;
+        const probeRing = new THREE.Mesh(new THREE.TorusGeometry(3.5, 0.3, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        probeRing.rotation.x = Math.PI / 2; probeRing.position.y = 0.5;
+        detectorGroup.add(probeBody, probeSensor, probeRing);
+        scene.add(detectorGroup);
+
+        // --- FLÈCHES MESURES ---
+        const measuresGroup = new THREE.Group();
+        scene.add(measuresGroup);
+        measuresGroup.visible = showMeasures; 
+
+        const arrowD_Line = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 8), new THREE.MeshBasicMaterial({color: 0x3498db}));
+        arrowD_Line.rotation.z = Math.PI / 2;
+        const arrowD_Head = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 16), new THREE.MeshBasicMaterial({color: 0x3498db}));
+        arrowD_Head.rotation.z = -Math.PI / 2;
+        measuresGroup.add(arrowD_Line); measuresGroup.add(arrowD_Head);
+        const spriteD = createTextSprite("D", "#3498db"); measuresGroup.add(spriteD);
+
+        const arrowA_Line = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 8), new THREE.MeshBasicMaterial({color: 0xe74c3c}));
+        arrowA_Line.rotation.x = Math.PI / 2;
+        const arrowA_Head1 = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 16), new THREE.MeshBasicMaterial({color: 0xe74c3c}));
+        const arrowA_Head2 = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 16), new THREE.MeshBasicMaterial({color: 0xe74c3c}));
+        arrowA_Head2.rotation.x = Math.PI;
+        measuresGroup.add(arrowA_Line); measuresGroup.add(arrowA_Head1); measuresGroup.add(arrowA_Head2);
+        const spriteA = createTextSprite("a", "#e74c3c"); measuresGroup.add(spriteA);
+
+        const arrowI_Line = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1, 8), new THREE.MeshBasicMaterial({color: 0x2ecc71}));
+        arrowI_Line.rotation.x = Math.PI / 2;
+        const arrowI_Head1 = new THREE.Mesh(new THREE.ConeGeometry(1, 2.5, 16), new THREE.MeshBasicMaterial({color: 0x2ecc71}));
+        const arrowI_Head2 = new THREE.Mesh(new THREE.ConeGeometry(1, 2.5, 16), new THREE.MeshBasicMaterial({color: 0x2ecc71}));
+        arrowI_Head2.rotation.x = Math.PI;
+        measuresGroup.add(arrowI_Line); measuresGroup.add(arrowI_Head1); measuresGroup.add(arrowI_Head2);
+        const spriteI = createTextSprite("i", "#2ecc71"); measuresGroup.add(spriteI);
+
+
+        // --- CANVAS ---
+        const oscCanvas = document.getElementById('scope-canvas');
+        const oscCtx = oscCanvas.getContext('2d');
+        const fringeCanvas = document.getElementById('fringe-canvas');
+        const fringeCtx = fringeCanvas.getContext('2d');
+
+        function resizeCanvases() {
+            if(oscCanvas.parentNode) { oscCanvas.width = oscCanvas.parentNode.clientWidth; oscCanvas.height = oscCanvas.parentNode.clientHeight; }
+            if(fringeCanvas.parentNode) { fringeCanvas.width = fringeCanvas.parentNode.clientWidth; fringeCanvas.height = fringeCanvas.parentNode.clientHeight; }
+        }
+        resizeCanvases();
+
+
+        // --- ANIMATION ---
+        const clock = new THREE.Clock();
+        const tempColor = new THREE.Color(); 
+        const baseColorObj = new THREE.Color();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const dt = clock.getDelta();
+            simTime += dt * params.timeScale;
+
+            const k = (2 * Math.PI * params.freq) / params.c; 
+            const omega = 2 * Math.PI * params.freq;  
+            const lambdaPhys = params.c / params.freq;
+
+            // Update intensity line color
+            intensityLine.material.color = currentColor;
+            ray1Mesh.material.color.copy(currentColor);
+            ray2Mesh.material.color.copy(currentColor);
+
+            const pos = geo.attributes.position;
+            const colorsArray = geo.attributes.color.array;
+            const laserX = GRID_SIZE/2; 
+            const wallX = params.wallX;
+            const slitHalfGap = params.gap / 2;
+            const beamWidth = params.gap + 40; 
+            const maxAmp = params.amp * 2; 
+
+            // GESTION MATERIAL BLENDING & SPECULAR
+            if(params.showPlane) {
+                 water.material.blending = THREE.NormalBlending;
+                 water.material.depthWrite = true;
+                 water.material.specular.setHex(0x111111); // Specular normal
+                 baseColorObj.copy(water.material.color);
+            } else {
+                 // MODE TRANSPARENT "VAGUE DANS LE VIDE"
+                 water.material.blending = THREE.AdditiveBlending; 
+                 water.material.depthWrite = false; 
+                 water.material.specular.setHex(0x000000); // 0 REFLET GRISANT
+                 baseColorObj.setHex(0x000000); // FOND NOIR ABSOLU
+            }
+
+            // CALCUL ONDES EAU
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                let h = 0;
+                let phaseAtPoint = 0;
+                const VISUAL_GAIN = 3.0;
+
+                if (x > wallX) {
+                    // Avant le mur (Onde plane)
+                    if (Math.abs(z) < beamWidth/2) {
+                        const dist = laserX - x;
+                        let beamFactor = 1.0;
+                        const edgeDist = (beamWidth/2) - Math.abs(z);
+                        if(edgeDist < 10) beamFactor = edgeDist / 10;
+                        phaseAtPoint = omega * simTime - k * dist;
+                        h += params.amp * VISUAL_GAIN * Math.sin(phaseAtPoint) * beamFactor;
+                    }
+                } else {
+                    // Après le mur (Interférences)
+                    const distToWall = laserX - wallX;
+                    const phaseAtWall = omega * simTime - k * distToWall;
+                    
+                    let w1 = 0; 
+                    let w2 = 0;
+                    
+                    if(params.openS1) {
+                        const d1 = Math.sqrt((x - wallX)**2 + (z - (-slitHalfGap))**2); 
+                        const damp1 = 1.0 / Math.sqrt(Math.max(1.0, d1 * 0.1));
+                        let diffFactor1 = 1.0;
+                        if (params.diffraction) {
+                            const theta1 = Math.atan2(z + slitHalfGap, wallX - x); 
+                            const beta1 = (Math.PI * params.slitWidth * Math.sin(theta1)) / lambdaPhys;
+                            if (Math.abs(beta1) > 0.001) diffFactor1 = (Math.sin(beta1)/beta1)**2;
+                        }
+                        w1 = Math.sin(phaseAtWall - k * d1) * damp1 * diffFactor1;
+                    }
+
+                    if(params.openS2) {
+                        const d2 = Math.sqrt((x - wallX)**2 + (z - slitHalfGap)**2);
+                        const damp2 = 1.0 / Math.sqrt(Math.max(1.0, d2 * 0.1));
+                        let diffFactor2 = 1.0;
+                        if (params.diffraction) {
+                            const theta2 = Math.atan2(z - slitHalfGap, wallX - x);
+                            const beta2 = (Math.PI * params.slitWidth * Math.sin(theta2)) / lambdaPhys;
+                            if (Math.abs(beta2) > 0.001) diffFactor2 = (Math.sin(beta2)/beta2)**2;
+                        }
+                        w2 = Math.sin(phaseAtWall - k * d2) * damp2 * diffFactor2;
+                    }
+
+                    h += params.amp * VISUAL_GAIN * (w1 + w2);
+                }
+                pos.setY(i, h);
+
+                // Couleur dynamique
+                const intensityFactor = Math.min(1.0, (Math.abs(h/VISUAL_GAIN) / maxAmp)); 
+                tempColor.copy(baseColorObj); 
+                tempColor.lerp(currentColor, intensityFactor * 2.0); 
+                colorsArray[i * 3 + 0] = tempColor.r; colorsArray[i * 3 + 1] = tempColor.g; colorsArray[i * 3 + 2] = tempColor.b;
+            }
+            pos.needsUpdate = true;
+            geo.attributes.color.needsUpdate = true; 
+            geo.computeVertexNormals();
+
+            // MAJ OBJETS & BOUCHONS
+            wallGroup.position.x = params.wallX;
+            const midSize = Math.max(0.1, params.gap - params.slitWidth);
+            wMid.scale.z = midSize / 10; 
+            const offset = (params.gap + params.slitWidth) / 2; 
+            wTop.position.z = offset + 60; 
+            wBot.position.z = -offset - 60;
+
+            // CORRECTIF GEOMETRIE PARASITE
+            // On s'assure que les bouchons ne dépassent pas ou n'apparaissent pas bizzarement
+            plug1.visible = !params.openS1;
+            plug2.visible = !params.openS2;
+            if(plug1.visible) {
+                plug1.position.z = -params.gap/2;
+                plug1.scale.z = params.slitWidth + 2; 
+                plug1.scale.x = 1.0; // Reset scale x
+            }
+            if(plug2.visible) {
+                plug2.position.z = params.gap/2;
+                plug2.scale.z = params.slitWidth + 2;
+                plug2.scale.x = 1.0; 
+            }
+
+            // SECURITE DETECTEUR
+            if(params.detectorX > params.wallX - 2) {
+                params.detectorX = params.wallX - 2;
+            }
+            detectorGroup.position.set(params.detectorX, 2, params.detectorZ);
+            
+            const S1 = new THREE.Vector3(params.wallX, 5, -slitHalfGap);
+            const S2 = new THREE.Vector3(params.wallX, 5, slitHalfGap);
+            const P  = new THREE.Vector3(params.detectorX, 5, params.detectorZ);
+            const texOffset = -params.freq * simTime;
+
+            ray1Mesh.visible = params.openS1;
+            if(params.openS1) {
+                ray1Mesh.position.copy(S1); ray1Mesh.lookAt(P);
+                const len1 = S1.distanceTo(P); ray1Mesh.scale.z = len1;
+                ray1Mesh.material.map.repeat.set(1, len1 / lambdaPhys); ray1Mesh.material.map.offset.y = texOffset;
+            }
+
+            ray2Mesh.visible = params.openS2;
+            if(params.openS2) {
+                ray2Mesh.position.copy(S2); ray2Mesh.lookAt(P);
+                const len2 = S2.distanceTo(P); ray2Mesh.scale.z = len2;
+                ray2Mesh.material.map.repeat.set(1, len2 / lambdaPhys); ray2Mesh.material.map.offset.y = texOffset;
+            }
+
+            // DELTA ET ORDRE D'INTERFERENCE
+            deltaMesh.visible = false;
+            let len1 = S1.distanceTo(P);
+            let len2 = S2.distanceTo(P);
+            let p_value = 0;
+            let p_status = "---";
+            let p_class = "status-neutral";
+
+            if(params.openS1 && params.openS2) {
+                let S_Short, S_Long, len_Short, len_Long;
+                if (len1 < len2) { S_Short = S1; len_Short = len1; S_Long = S2; len_Long = len2; } else { S_Short = S2; len_Short = len2; S_Long = S1; len_Long = len1; }
+                const delta = len_Long - len_Short;
+
+                if (delta > 0.01) {
+                    deltaMesh.visible = true;
+                    deltaMesh.position.copy(S_Long); deltaMesh.lookAt(P); 
+                    deltaMesh.scale.z = delta; deltaMesh.position.y = 8;
+                    deltaMesh.material.map.repeat.set(1, delta / lambdaPhys);
+                }
+
+                p_value = delta / lambdaPhys;
+                const decimal = p_value % 1; 
+                if (decimal < 0.15 || decimal > 0.85) {
+                    p_status = "Constructive";
+                    p_class = "status-constructive";
+                } else if (decimal > 0.35 && decimal < 0.65) {
+                    p_status = "Destructive";
+                    p_class = "status-destructive";
+                } else {
+                    p_status = "Intermédiaire";
+                    p_class = "status-neutral";
+                }
+            } else {
+                p_status = "---";
+            }
+
+            const D_val = Math.abs(SCREEN_POS_X - params.wallX);
+            const a_val = params.gap;
+            const i_val = (lambdaPhys * D_val) / a_val;
+            
+            const D_disp = (D_val / 30).toFixed(2); 
+            const a_disp = (params.gap / 30).toFixed(2); 
+            const i_disp_calc = (params.lambdaNm * 1e-9 * parseFloat(D_disp)) / (parseFloat(a_disp) * 1e-3) * 1000; 
+            
+            document.getElementById('f-D').innerText = D_disp + " m";
+            document.getElementById('f-a').innerText = a_disp + " mm";
+            document.getElementById('f-i').innerText = i_disp_calc.toFixed(2) + " mm";
+            document.getElementById('f-lambda').innerText = params.lambdaNm + " nm";
+
+            const pElem = document.getElementById('f-p');
+            const statusElem = document.getElementById('f-status');
+            if (params.openS1 && params.openS2) {
+                pElem.innerText = p_value.toFixed(2);
+                statusElem.innerText = p_status;
+                statusElem.className = "order-status " + p_class;
+            } else {
+                pElem.innerText = "---";
+                statusElem.innerText = "Non Défini";
+                statusElem.className = "order-status status-neutral";
+            }
+
+            // GESTION INTELLIGENTE DE LA LEGENDE
+            const legendBtn = document.getElementById('btn-show-measure');
+            const areInterferencesActive = params.openS1 && params.openS2;
+
+            if (areInterferencesActive) {
+                // Comportement normal
+                legendBtn.classList.remove("disabled-look");
+                if (showMeasures) {
+                    legendBtn.innerText = "Cacher Légende";
+                    measuresGroup.visible = true;
+                } else {
+                    legendBtn.innerText = "Afficher Légende (i, D, a)";
+                    measuresGroup.visible = false;
+                }
+            } else {
+                // Désactivation forcée visuelle
+                legendBtn.classList.add("disabled-look");
+                legendBtn.innerText = "Légende (Interférences inactives)";
+                measuresGroup.visible = false;
+            }
+
+            if (measuresGroup.visible) {
+                const safeD = Math.max(0.1, D_val - 4); 
+                arrowD_Line.position.set((SCREEN_POS_X + params.wallX)/2, 40, -50); arrowD_Line.scale.y = safeD; arrowD_Head.position.set(SCREEN_POS_X, 40, -50); spriteD.position.set((SCREEN_POS_X + params.wallX)/2, 50, -50);
+                
+                let scaleHeadA = 1.0; if(params.gap < 10) scaleHeadA = params.gap / 10;
+                arrowA_Head1.scale.set(scaleHeadA, scaleHeadA, scaleHeadA); arrowA_Head2.scale.set(scaleHeadA, scaleHeadA, scaleHeadA);
+                const safeGap = Math.max(0.1, params.gap - 3 * scaleHeadA); 
+                arrowA_Line.position.set(params.wallX, 40, 0); arrowA_Line.scale.y = safeGap; 
+                arrowA_Head1.position.set(params.wallX, 40, params.gap/2 - 0.5 * scaleHeadA); arrowA_Head2.position.set(params.wallX, 40, -params.gap/2 + 0.5 * scaleHeadA); 
+                spriteA.position.set(params.wallX, 50, 0);
+
+                let scaleHeadI = 1.0; if(i_val < 8) scaleHeadI = i_val / 8;
+                arrowI_Head1.scale.set(scaleHeadI, scaleHeadI, scaleHeadI); arrowI_Head2.scale.set(scaleHeadI, scaleHeadI, scaleHeadI);
+                const safeI = Math.max(0.1, i_val - 2.5 * scaleHeadI);
+                const centerI = i_val / 2;
+                arrowI_Line.position.set(SCREEN_POS_X + 4, 35, centerI); arrowI_Line.scale.y = safeI;
+                arrowI_Head1.position.set(SCREEN_POS_X + 4, 35, i_val - 0.5 * scaleHeadI); arrowI_Head2.position.set(SCREEN_POS_X + 4, 35, 0 + 0.5 * scaleHeadI);     
+                spriteI.position.set(SCREEN_POS_X + 4, 45, i_val/2);
+            }
+
+            const graphPointsArr = [];
+            const D_screen = Math.abs(SCREEN_POS_X - wallX);
+            const globalIntensityFactor = params.amp / 5.0; 
+
+            for(let i=0; i<=graphRes; i++) {
+                const z = (i / graphRes) * GRID_SIZE - (GRID_SIZE/2);
+                let I_val = 0;
+                
+                if(params.openS1 && params.openS2) {
+                     const r1 = Math.sqrt(D_screen**2 + (z + slitHalfGap)**2);
+                     const r2 = Math.sqrt(D_screen**2 + (z - slitHalfGap)**2);
+                     const phase = k * (r2-r1);
+                     let diff = 1.0;
+                     if(params.diffraction) {
+                        const theta = Math.atan(z / D_screen);
+                        const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                         if(Math.abs(beta) > 0.001) diff = (Math.sin(beta)/beta);
+                     }
+                     I_val = Math.cos(phase/2)**2 * diff**2;
+                } else if (params.openS1) {
+                    let diff = 1.0;
+                    if(params.diffraction) {
+                         const theta = Math.atan((z + slitHalfGap) / D_screen); 
+                         const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                         if(Math.abs(beta) > 0.001) diff = (Math.sin(beta)/beta);
+                    }
+                    I_val = 0.25 * diff**2; 
+                } else if (params.openS2) {
+                     let diff = 1.0;
+                    if(params.diffraction) {
+                         const theta = Math.atan((z - slitHalfGap) / D_screen); 
+                         const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                         if(Math.abs(beta) > 0.001) diff = (Math.sin(beta)/beta);
+                    }
+                    I_val = 0.25 * diff**2;
+                }
+                I_val *= globalIntensityFactor;
+                let valY = 50 * I_val - 20; 
+                graphPointsArr.push(new THREE.Vector3(2.5, valY, z));
+            }
+            intensityLine.geometry.setFromPoints(graphPointsArr);
+
+            const w = oscCanvas.width;
+            const h = oscCanvas.height;
+            const centerY = h / 2;
+            const scaleX = 500; 
+            const scaleY = 35;  
+            const slowTime = simTime * 0.1; 
+
+            oscCtx.fillStyle = '#050505'; oscCtx.fillRect(0, 0, w, h);
+            oscCtx.strokeStyle = '#333'; oscCtx.lineWidth=1;
+            oscCtx.beginPath(); oscCtx.moveTo(0, centerY); oscCtx.lineTo(w, centerY); oscCtx.stroke();
+            
+            if(params.openS1) {
+                oscCtx.strokeStyle = 'cyan'; oscCtx.lineWidth=2; oscCtx.beginPath();
+                for(let x=0; x<w; x++) {
+                    const val = Math.sin(omega * (slowTime + x/scaleX) - k * len1);
+                    oscCtx.lineTo(x, centerY - val*scaleY);
+                }
+                oscCtx.stroke();
+            }
+            if(params.openS2) {
+                oscCtx.strokeStyle = 'magenta'; oscCtx.lineWidth=2; oscCtx.beginPath();
+                for(let x=0; x<w; x++) {
+                    const val = Math.sin(omega * (slowTime + x/scaleX) - k * len2);
+                    oscCtx.lineTo(x, centerY - val*scaleY);
+                }
+                oscCtx.stroke();
+            }
+            if(params.openS1 || params.openS2) {
+                oscCtx.strokeStyle = 'white'; oscCtx.lineWidth=3; oscCtx.beginPath();
+                for(let x=0; x<w; x++) {
+                    let v1 = 0, v2 = 0;
+                    if(params.openS1) v1 = Math.sin(omega * (slowTime + x/scaleX) - k * len1);
+                    if(params.openS2) v2 = Math.sin(omega * (slowTime + x/scaleX) - k * len2);
+                    oscCtx.lineTo(x, centerY - (v1+v2)*scaleY);
+                }
+                oscCtx.stroke();
+                oscCtx.fillStyle = '#fff'; oscCtx.font="11px Arial"; oscCtx.fillText("Somme", 10, 20);
+            }
+
+            const wf = fringeCanvas.width;
+            const hf = fringeCanvas.height;
+            fringeCtx.fillStyle = '#000'; fringeCtx.fillRect(0, 0, wf, hf);
+            
+            const c = currentColor;
+            const rBase = c.r * 255, gBase = c.g * 255, bBase = c.b * 255;
+            const gf = params.amp / 1.8; 
+
+            const imgData = fringeCtx.getImageData(0, 0, wf, hf);
+            const data = imgData.data;
+            
+            for (let x = 0; x < wf; x++) {
+                const zWorld = (x / wf - 0.5) * GRID_SIZE; 
+                let intensity = 0;
+                if (params.openS1 && params.openS2) {
+                    const r1 = Math.sqrt(D_screen**2 + (zWorld + slitHalfGap)**2);
+                    const r2 = Math.sqrt(D_screen**2 + (zWorld - slitHalfGap)**2);
+                    const delta = r2 - r1;
+                    const phi = k * delta;
+                    intensity = Math.cos(phi / 2) ** 2;
+                    if (params.diffraction) {
+                        const theta = Math.atan(zWorld / D_screen);
+                        const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                        if(Math.abs(beta) > 0.001) intensity *= (Math.sin(beta)/beta)**2;
+                    }
+                } else if (params.openS1) {
+                    intensity = 0.25; 
+                     if (params.diffraction) {
+                        const theta = Math.atan((zWorld+slitHalfGap) / D_screen);
+                        const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                        if(Math.abs(beta) > 0.001) intensity *= (Math.sin(beta)/beta)**2;
+                    }
+                } else if (params.openS2) {
+                    intensity = 0.25;
+                     if (params.diffraction) {
+                        const theta = Math.atan((zWorld-slitHalfGap) / D_screen);
+                        const beta = (Math.PI * params.slitWidth * Math.sin(theta)) / lambdaPhys;
+                        if(Math.abs(beta) > 0.001) intensity *= (Math.sin(beta)/beta)**2;
+                    }
+                }
+                intensity *= gf;
+                for (let y = 0; y < hf; y++) {
+                    const idx = (y * wf + x) * 4;
+                    const vVignette = 1 - Math.pow(Math.abs((y - hf/2)/(hf/2)), 4);
+                    const finalInt = Math.min(1.0, intensity * vVignette * 3.5);
+                    data[idx] = rBase * finalInt; 
+                    data[idx+1] = gBase * finalInt; 
+                    data[idx+2] = bBase * finalInt; 
+                    data[idx+3] = 255;
+                }
+            }
+            fringeCtx.putImageData(imgData, 0, 0);
+
+            if (showMeasures && areInterferencesActive) {
+                const pixelsPerUnit = wf / GRID_SIZE;
+                const i_pixels = i_val * pixelsPerUnit;
+                const cx = wf/2;
+                const cy = hf/2;
+                const p1 = cx;
+                const p2 = cx + i_pixels;
+                fringeCtx.strokeStyle = "#2ecc71";
+                fringeCtx.lineWidth = 3;
+                fringeCtx.beginPath();
+                fringeCtx.moveTo(p1, cy + 30); fringeCtx.lineTo(p2, cy + 30);
+                fringeCtx.moveTo(p1 + 5, cy + 25); fringeCtx.lineTo(p1, cy + 30); fringeCtx.lineTo(p1 + 5, cy + 35);
+                fringeCtx.moveTo(p2 - 5, cy + 25); fringeCtx.lineTo(p2, cy + 30); fringeCtx.lineTo(p2 - 5, cy + 35);
+                fringeCtx.stroke();
+                fringeCtx.fillStyle = "#2ecc71"; fringeCtx.font = "bold 16px Arial"; fringeCtx.fillText("i", (p1+p2)/2 - 5, cy + 50);
+            }
+            renderer.render(scene, camera);
+        }
+
+        // --- HANDLERS ---
+        window.updateLambda = (v) => { params.lambdaNm = parseFloat(v); document.getElementById('val-lambda').innerText = v + " nm"; document.getElementById('val-lambda').style.color = "#" + wavelengthToColor(params.lambdaNm).getHexString(); updateFreqFromLambda(); };
+        window.updateAmp = (v) => { params.amp = parseFloat(v); document.getElementById('val-amp').innerText = v; };
+        window.updateGap = (v) => { 
+            params.gap = parseFloat(v); 
+            if(params.slitWidth > params.gap - 2) {
+                params.slitWidth = params.gap - 2;
+                document.getElementById('val-width').innerText = params.slitWidth;
+            }
+            document.getElementById('val-gap').innerText = v; 
+        };
+        window.updateWallPos = (v) => { params.wallX = parseFloat(v); document.getElementById('val-wall').innerText = v; };
+        
+        window.updateDiffraction = (checked) => { 
+            params.diffraction = checked; 
+            const controlDiv = document.getElementById('control-slit-width');
+            controlDiv.style.display = checked ? "block" : "none";
+            if (!checked) {
+                params.slitWidth = 2.0; 
+                document.getElementById('val-width').innerText = "2.0";
+                document.getElementById('input-width').value = 2.0;
+            }
+        };
+
+        window.updateSlits = () => {
+            params.openS1 = document.getElementById('chk-s1').checked;
+            params.openS2 = document.getElementById('chk-s2').checked;
+        };
+        window.updateTimeScale = (v) => { params.timeScale = parseFloat(v); document.getElementById('val-speed').innerText = v + "x"; };
+        window.updateSlitWidth = (v) => {
+            let val = parseFloat(v);
+            if(val > params.gap - 2) val = params.gap - 2;
+            params.slitWidth = val;
+            document.getElementById('val-width').innerText = val;
+        };
+        window.updateBgBrightness = (v) => { 
+            params.bgBrightness = parseFloat(v); 
+            const c = new THREE.Color(params.bgBrightness, params.bgBrightness, params.bgBrightness);
+            scene.background = c; scene.fog.color = c; 
+        };
+        window.updatePlaneBrightness = (v) => { 
+            params.planeBrightness = parseFloat(v); 
+            const b = params.planeBrightness; 
+            water.material.color.setRGB(0.2 + b*0.8, 0.28 + b*0.72, 0.36 + b*0.64); 
+        };
+        
+        window.togglePlane = (v) => {
+             params.showPlane = v;
+        };
+
+        window.toggleMeasures = () => {
+            const areInterferencesActive = params.openS1 && params.openS2;
+            if(!areInterferencesActive) return; // Ignore clicks if disabled
+
+            showMeasures = !showMeasures;
+            const btn = document.getElementById('btn-show-measure');
+            if(showMeasures) {
+                btn.classList.add("active");
+                btn.innerText = "Cacher Légende";
+            } else {
+                btn.classList.remove("active");
+                btn.innerText = "Afficher Légende (i, D, a)";
+            }
+        };
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container3D.clientWidth / container3D.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container3D.clientWidth, container3D.clientHeight);
+            resizeCanvases();
+        });
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -2); 
+        let isDragging = false;
+
+        function onPointerDown(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            if (raycaster.intersectObjects(detectorGroup.children).length > 0) {
+                isDragging = true; 
+                if(controls) controls.enabled = false; 
+                document.body.style.cursor = 'grabbing';
+            }
+        }
+        function onPointerMove(event) {
+            if (!isDragging) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const target = new THREE.Vector3();
+            raycaster.ray.intersectPlane(dragPlane, target);
+            if (target) {
+                let maxX = params.wallX - 2; 
+                let minX = -100;
+                params.detectorX = Math.max(minX, Math.min(maxX, target.x));
+                params.detectorZ = Math.max(-80, Math.min(80, target.z));
+            }
+        }
+        function onPointerUp() { 
+            if (isDragging) { 
+                isDragging = false; 
+                if(controls) controls.enabled = true; 
+                document.body.style.cursor = 'default'; 
+            } 
+        }
+        renderer.domElement.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        animate();
+    };
+    </script>
+</body>
+</html>

@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✏️ Concepteur de Plan de Classe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* === TOOLBAR === */
+        #toolbar {
+            width: 220px;
+            background-color: #e0e0e0;
+            padding: 15px;
+            overflow-y: auto;
+            border-right: 2px solid #999;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            position: relative; /* Pour positionner la signature en bas */
+        }
+
+        #toolbar h3 {
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #333;
+            border-bottom: 1px solid #999;
+            padding-bottom: 2px;
+        }
+
+        #toolbar h3:first-child {
+            margin-top: 0;
+        }
+
+        .draggable-label {
+            background-color: white;
+            border: 1px solid #999;
+            border-radius: 3px;
+            padding: 8px;
+            margin: 5px 0;
+            text-align: center;
+            cursor: grab;
+            font-size: 13px;
+        }
+
+        .draggable-label:active {
+            cursor: grabbing;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #999;
+            border-radius: 3px;
+            background-color: white;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #f0f0f0;
+        }
+
+        button:active {
+            background-color: #d0d0d0;
+        }
+
+        /* Bouton d'aide spécifique */
+        #help-btn {
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        #help-btn:hover {
+            background-color: #138496;
+        }
+
+        /* Signature en bas à gauche */
+        #signature {
+            margin-top: auto; /* Pousse tout en bas */
+            padding-top: 20px;
+            font-size: 11px;
+            color: #777;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* === WORKSPACE === */
+        #workspace-container {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            background-color: #f9f9f9;
+        }
+
+        #workspace {
+            position: relative;
+            width: 4000px;
+            height: 4000px;
+            background-color: white;
+            cursor: default;
+            /* Motif de grille optionnel pour aider */
+            background-image: radial-gradient(#ddd 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        #selection-rect {
+            position: absolute;
+            border: 1px solid #0066cc;
+            background-color: rgba(160, 196, 255, 0.3);
+            display: none;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        /* === TABLES === */
+        .table-item {
+            position: absolute;
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .table-border {
+            border: 4px solid #333;
+            background-color: white;
+            cursor: move;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .table-item.selected .table-border {
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.3);
+        }
+
+        .table-item .student-cell {
+            border: 1px solid #666;
+            padding: 4px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            word-break: break-word;
+            font-size: 13px;
+            background-color: white;
+            min-height: 45px;
+            cursor: grab; 
+            user-select: none; 
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+
+        .table-item .student-cell.is-dragging {
+            opacity: 0.5;
+            background-color: #e9ecef;
+        }
+
+        .table-item .student-cell.drag-over {
+            background-color: #e2e6ea;
+            outline: 2px dashed #0066cc;
+        }
+
+        .table-item .student-cell.is-editing {
+            outline: 2px solid #0066cc;
+            background-color: #fffacd;
+            cursor: text;
+            user-select: text;
+            z-index: 10;
+        }
+
+        .table-layout-1, .table-layout-2, .table-layout-3 { display: flex; }
+        .table-layout-4 { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+        .table-layout-2 .student-cell:first-child,
+        .table-layout-3 .student-cell:not(:last-child) { border-right: 1px solid #666; }
+        
+        .table-layout-4 .student-cell:nth-child(1),
+        .table-layout-4 .student-cell:nth-child(2) { border-bottom: 1px solid #666; }
+        
+        .table-layout-4 .student-cell:nth-child(1),
+        .table-layout-4 .student-cell:nth-child(3) { border-right: 1px solid #666; }
+
+        /* === MODALS === */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 25px;
+            border: 1px solid #888;
+            width: 600px; /* Plus large pour la notice */
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .modal-content h2 { margin-top: 0; color: #333; border-bottom: 2px solid #17a2b8; padding-bottom: 10px; }
+        .modal-content h3 { margin-top: 20px; color: #555; }
+        .modal-content p, .modal-content li { line-height: 1.5; color: #444; }
+        .modal-content ul { margin-bottom: 15px; }
+        
+        .info-box {
+            background-color: #e9ecef;
+            border-left: 4px solid #17a2b8;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+    <div id="selection-rect"></div>
+
+    <div id="toolbar">
+        <button id="help-btn" onclick="openHelpModal()">❓ Notice / Aide</button>
+
+        <h3>Fichier</h3>
+        <button onclick="saveLayout()">💾 Enregistrer le plan</button>
+        <button onclick="document.getElementById('loadFile').click()">📂 Ouvrir un plan</button>
+        <input type="file" id="loadFile" accept=".json" onchange="loadLayout(event)">
+
+        <h3>Édition</h3>
+        <div class="draggable-label" draggable="true" data-students="1">Table (1 élève)</div>
+        <div class="draggable-label" draggable="true" data-students="2">Table (2 élèves)</div>
+        <div class="draggable-label" draggable="true" data-students="3">Table (3 élèves)</div>
+        <div class="draggable-label" draggable="true" data-students="4">Table (4 élèves)</div>
+        <button onclick="rotateSelection()">🔄 Rotation 90°</button>
+        <button onclick="deleteSelection()">❌ Supprimer</button>
+
+        <h3>Alignement</h3>
+        <button onclick="alignTop()">── Aligner en Haut</button>
+        <button onclick="alignLeft()">│ Aligner à Gauche</button>
+        <button onclick="distributeHorizontally()">↔ Distribuer Horiz.</button>
+        <button onclick="distributeVertically()">↕ Distribuer Vert.</button>
+
+        <h3>Actions</h3>
+        <button onclick="distributeStudents()">✨ Répartir les élèves</button>
+        <button onclick="exportToPDF()">📄 Exporter en PDF</button>
+
+        <!-- Signature ajoutée ici -->
+        <div id="signature">Espinosa T. - Lycée Albert Einstein</div>
+    </div>
+
+    <div id="workspace-container">
+        <div id="workspace"></div>
+    </div>
+
+    <!-- MODAL CHOIX FORMAT NOM -->
+    <div id="nameFormatModal" class="modal">
+        <div class="modal-content" style="width: 400px;">
+            <h3>Format des Noms</h3>
+            <p>Quel format de nom souhaitez-vous utiliser pour l'import ?</p>
+            <div class="modal-buttons">
+                <button onclick="distributeWithFormat('full')">Nom Complet</button>
+                <button onclick="distributeWithFormat('abbreviated')">Nom Abrégé (P. Nom)</button>
+                <button onclick="closeModal('nameFormatModal')">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NOTICE / AIDE -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <h2>Notice d'Utilisation</h2>
+            
+            <h3>1. Importer une liste d'élèves</h3>
+            <p>Pour remplir automatiquement les tables, le programme utilise le contenu de votre <b>Presse-papiers</b> (Copier/Coller).</p>
+            <div class="info-box">
+                <b>Méthode 1 : Depuis PRONOTE</b><br>
+                1. Allez dans l'onglet <b>Ressources</b> > <b>Classes</b> (ou Emploi du temps).<br>
+                2. Affichez la liste des élèves de la classe.<br>
+                3. Sélectionnez la liste (Ctrl+A ou à la souris) et faites <b>Copier</b> (Ctrl+C).
+            </div>
+            <div class="info-box">
+                <b>Méthode 2 : Depuis Excel / Tableur</b><br>
+                1. Créez une colonne avec vos élèves.<br>
+                2. La <b>première ligne</b> doit impérativement contenir le mot <b>"Nom"</b>.<br>
+                3. Les lignes suivantes contiennent les noms des élèves.<br>
+                4. Sélectionnez la colonne et faites <b>Copier</b>.
+            </div>
+            <p>Ensuite, cliquez sur le bouton <b>"✨ Répartir les élèves"</b> dans l'application.</p>
+
+            <h3>2. Manipuler les tables et élèves</h3>
+            <ul>
+                <li><b>Ajouter une table :</b> Glissez-déposez depuis le menu de gauche vers la zone blanche.</li>
+                <li><b>Déplacer une table :</b> Cliquez sur la <b>bordure noire</b> de la table et glissez.</li>
+                <li><b>Sélectionner plusieurs tables :</b> Tracez un rectangle de sélection sur le fond blanc avec la souris.</li>
+                <li><b>Échanger deux élèves :</b> Glissez simplement une case élève vers une autre case.</li>
+                <li><b>Modifier un nom :</b> Cliquez sur une case pour éditer le texte manuellement.</li>
+            </ul>
+
+            <h3>3. Sauvegarde et Export</h3>
+            <ul>
+                <li><b>💾 Enregistrer le plan :</b> Télécharge un fichier de>.json</code> contenant votre disposition.<br>
+                <i>Le fichier est enregistré dans votre dossier <b>"Téléchargements"</b> par défaut.</i></li>
+                <li><b>📄 Exporter en PDF :</b> Génère un PDF A4 paysage optimisé pour l'impression.</li>
+            </ul>
+
+            <div class="modal-buttons">
+                <button onclick="closeModal('helpModal')" style="background-color: #333; color: white; width: auto; padding: 8px 20px;">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === GESTION DES MODALS ===
+        function openHelpModal() {
+            document.getElementById('helpModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        // Fermeture des modals en cliquant en dehors
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        let tables = [];
+        let tableIdCounter = 0;
+        let selectedTables = new Set();
+        
+        let isDraggingTable = false;
+        let draggedTable = null;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        
+        let isSelecting = false;
+        let selectionStartX = 0;
+        let selectionStartY = 0;
+        const selectionRect = document.getElementById('selection-rect');
+        
+        let clipboardData = '';
+        let draggedStudentData = null;
+
+        const workspace = document.getElementById('workspace');
+        const workspaceContainer = document.getElementById('workspace-container');
+        const TABLE_CELL_WIDTH = 130;
+        const TABLE_CELL_HEIGHT = 50;
+
+        // === DRAG TABLE FROM TOOLBAR ===
+        document.querySelectorAll('.draggable-label').forEach(label => {
+            label.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('type', 'newTable');
+                e.dataTransfer.setData('students', e.target.dataset.students);
+            });
+        });
+
+        workspace.addEventListener('dragover', (e) => e.preventDefault());
+
+        workspace.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('type');
+            
+            if (type === 'newTable') {
+                const numStudents = parseInt(e.dataTransfer.getData('students'));
+                if(!numStudents) return;
+                const rect = workspace.getBoundingClientRect();
+                const x = e.clientX - rect.left + workspaceContainer.scrollLeft;
+                const y = e.clientY - rect.top + workspaceContainer.scrollTop;
+                createTable(numStudents, x, y);
+            }
+        });
+
+        // === SELECTION RECTANGLE ===
+        workspace.addEventListener('mousedown', (e) => {
+            if (e.target === workspace) {
+                if (!e.ctrlKey && !e.metaKey) clearSelection();
+                isSelecting = true;
+                selectionStartX = e.pageX;
+                selectionStartY = e.pageY;
+                selectionRect.style.left = selectionStartX + 'px';
+                selectionRect.style.top = selectionStartY + 'px';
+                selectionRect.style.width = '0px';
+                selectionRect.style.height = '0px';
+                selectionRect.style.display = 'block';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDraggingTable && draggedTable) {
+                const rect = workspace.getBoundingClientRect();
+                const x = e.clientX - rect.left - dragOffsetX; 
+                const y = e.clientY - rect.top - dragOffsetY;
+                
+                if (selectedTables.size > 1 && selectedTables.has(draggedTable.id)) {
+                    const dx = x - draggedTable.x;
+                    const dy = y - draggedTable.y;
+                    selectedTables.forEach(id => {
+                        const table = tables.find(t => t.id === id);
+                        if (table) {
+                            table.x += dx;
+                            table.y += dy;
+                            renderTable(table);
+                        }
+                    });
+                } else {
+                    draggedTable.x = x;
+                    draggedTable.y = y;
+                    renderTable(draggedTable);
+                }
+            }
+
+            if (isSelecting) {
+                const currentX = e.pageX;
+                const currentY = e.pageY;
+                selectionRect.style.width = Math.abs(currentX - selectionStartX) + 'px';
+                selectionRect.style.height = Math.abs(currentY - selectionStartY) + 'px';
+                selectionRect.style.left = Math.min(currentX, selectionStartX) + 'px';
+                selectionRect.style.top = Math.min(currentY, selectionStartY) + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            isDraggingTable = false;
+            draggedTable = null;
+            if (isSelecting) {
+                isSelecting = false;
+                const selBounds = selectionRect.getBoundingClientRect();
+                if (selBounds.width > 5 && selBounds.height > 5) {
+                    tables.forEach(table => {
+                        const tableElem = document.getElementById(`table-${table.id}`);
+                        const tableBounds = tableElem.getBoundingClientRect();
+                        if (rectIntersect(selBounds, tableBounds)) selectTable(table.id);
+                    });
+                }
+                selectionRect.style.display = 'none';
+            }
+        });
+
+        function rectIntersect(r1, r2) {
+            return !(r2.left > r1.right || r2.right < r1.left || r2.top > r1.bottom || r2.bottom < r1.top);
+        }
+
+        function createTable(numStudents, x, y, rotation = 0, students = null) {
+            const table = {
+                id: tableIdCounter++,
+                numStudents: numStudents,
+                x: x,
+                y: y,
+                rotation: rotation,
+                students: students || Array(numStudents).fill('')
+            };
+            tables.push(table);
+            renderTable(table);
+        }
+
+        function renderTable(table) {
+            const existingElement = document.getElementById(`table-${table.id}`);
+            if (existingElement) existingElement.remove();
+
+            const container = document.createElement('div');
+            container.id = `table-${table.id}`;
+            container.className = `table-item`;
+            if(selectedTables.has(table.id)) container.classList.add('selected');
+            container.style.left = table.x + 'px';
+            container.style.top = table.y + 'px';
+            container.style.transform = `rotate(${table.rotation}deg)`;
+            container.style.transformOrigin = 'center';
+
+            const border = document.createElement('div');
+            border.className = 'table-border';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `table-layout-${table.numStudents}`;
+            contentDiv.style.width = (table.numStudents === 4 ? TABLE_CELL_WIDTH * 2 : TABLE_CELL_WIDTH * table.numStudents) + 'px';
+            contentDiv.style.height = (table.numStudents === 4 ? TABLE_CELL_HEIGHT * 2 : TABLE_CELL_HEIGHT) + 'px';
+
+            for (let i = 0; i < table.numStudents; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'student-cell';
+                cell.contentEditable = false; 
+                cell.innerText = table.students[i];
+                cell.style.width = TABLE_CELL_WIDTH + 'px';
+                cell.style.height = TABLE_CELL_HEIGHT + 'px';
+                cell.draggable = true;
+
+                cell.addEventListener('click', (e) => {
+                    if (cell.contentEditable === 'false') enterEditMode(cell);
+                    e.stopPropagation();
+                });
+
+                cell.addEventListener('blur', () => exitEditMode(cell, table, i));
+                
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        cell.blur();
+                    }
+                });
+
+                cell.addEventListener('mousedown', (e) => e.stopPropagation());
+
+                // DRAG & DROP LOGIC
+                cell.addEventListener('dragstart', (e) => {
+                    if (cell.isContentEditable) {
+                        e.preventDefault();
+                        return;
+                    }
+                    cell.classList.add('is-dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('type', 'studentSwap');
+                    draggedStudentData = { tableId: table.id, index: i };
+                });
+
+                cell.addEventListener('dragend', () => {
+                    cell.classList.remove('is-dragging');
+                    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+                    draggedStudentData = null;
+                });
+
+                cell.addEventListener('dragover', (e) => {
+                    if (draggedStudentData) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        cell.classList.add('drag-over');
+                    }
+                });
+
+                cell.addEventListener('dragleave', () => cell.classList.remove('drag-over'));
+
+                cell.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cell.classList.remove('drag-over');
+                    const type = e.dataTransfer.getData('type');
+                    if (type === 'studentSwap' && draggedStudentData) {
+                        const originTable = tables.find(t => t.id === draggedStudentData.tableId);
+                        const targetTable = table;
+                        if (originTable && targetTable) {
+                            const temp = originTable.students[draggedStudentData.index];
+                            originTable.students[draggedStudentData.index] = targetTable.students[i];
+                            targetTable.students[i] = temp;
+                            renderTable(originTable);
+                            if (originTable.id !== targetTable.id) renderTable(targetTable);
+                        }
+                    }
+                });
+                contentDiv.appendChild(cell);
+            }
+            border.appendChild(contentDiv);
+            container.appendChild(border);
+            
+            border.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                startDrag(e, table, container);
+            });
+            
+            container.addEventListener('click', (e) => e.stopPropagation());
+            workspace.appendChild(container);
+        }
+
+        function enterEditMode(cell) {
+            cell.contentEditable = true;
+            cell.classList.add('is-editing');
+            cell.draggable = false;
+            cell.focus();
+        }
+
+        function exitEditMode(cell, table, index) {
+            cell.contentEditable = false;
+            cell.classList.remove('is-editing');
+            cell.draggable = true;
+            table.students[index] = cell.innerText;
+        }
+
+        function startDrag(e, table, container) {
+            isDraggingTable = true;
+            draggedTable = table;
+            const rect = container.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            if (!e.ctrlKey && !e.metaKey) {
+                if (!selectedTables.has(table.id)) {
+                    clearSelection();
+                    selectTable(table.id);
+                }
+            } else toggleTableSelection(table.id);
+        }
+
+        function selectTable(id) {
+            selectedTables.add(id);
+            const el = document.getElementById(`table-${id}`);
+            if (el) el.classList.add('selected');
+        }
+        function deselectTable(id) {
+            selectedTables.delete(id);
+            const el = document.getElementById(`table-${id}`);
+            if (el) el.classList.remove('selected');
+        }
+        function toggleTableSelection(id) {
+            if (selectedTables.has(id)) deselectTable(id); else selectTable(id);
+        }
+        function clearSelection() {
+            selectedTables.forEach(id => deselectTable(id));
+            selectedTables.clear();
+        }
+
+        // === OUTILS DE LAYOUT ===
+        function rotateSelection() {
+            if (selectedTables.size === 0) return alert('Aucune table sélectionnée');
+            if (selectedTables.size === 1) {
+                const table = tables.find(t => selectedTables.has(t.id));
+                table.rotation = (table.rotation + 90) % 360;
+                renderTable(table);
+            } else {
+                const selectedTableObjects = tables.filter(t => selectedTables.has(t.id));
+                const centerX = selectedTableObjects.reduce((sum, t) => sum + t.x, 0) / selectedTableObjects.length;
+                const centerY = selectedTableObjects.reduce((sum, t) => sum + t.y, 0) / selectedTableObjects.length;
+                selectedTableObjects.forEach(table => {
+                    const dx = table.x - centerX;
+                    const dy = table.y - centerY;
+                    const angle = Math.PI / 2;
+                    table.x = centerX + (dx * Math.cos(angle) - dy * Math.sin(angle));
+                    table.y = centerY + (dx * Math.sin(angle) + dy * Math.cos(angle));
+                    table.rotation = (table.rotation + 90) % 360;
+                    renderTable(table);
+                });
+            }
+        }
+
+        function deleteSelection() {
+            if (selectedTables.size === 0) return alert('Aucune table sélectionnée');
+            if (confirm(`Supprimer les ${selectedTables.size} table(s) sélectionnée(s) ?`)) {
+                selectedTables.forEach(id => {
+                    tables = tables.filter(t => t.id !== id);
+                    const element = document.getElementById(`table-${id}`);
+                    if (element) element.remove();
+                });
+                selectedTables.clear();
+            }
+        }
+
+        // === ALIGNEMENT INTELLIGENT ===
+        function getTableVisualBounds(table) {
+            const el = document.getElementById(`table-${table.id}`);
+            if (!el) return null;
+            const rect = el.getBoundingClientRect();
+            const containerRect = workspaceContainer.getBoundingClientRect();
+            return {
+                left: rect.left + workspaceContainer.scrollLeft - containerRect.left,
+                top: rect.top + workspaceContainer.scrollTop - containerRect.top,
+                right: rect.right + workspaceContainer.scrollLeft - containerRect.left,
+                bottom: rect.bottom + workspaceContainer.scrollTop - containerRect.top,
+                width: rect.width, height: rect.height
+            };
+        }
+
+        function alignTop() {
+            if (selectedTables.size < 2) return;
+            let targets = [];
+            selectedTables.forEach(id => {
+                const t = tables.find(table => table.id === id);
+                if(t) targets.push({ table: t, bounds: getTableVisualBounds(t) });
+            });
+            const minY = Math.min(...targets.map(t => t.bounds.top));
+            targets.sort((a, b) => a.bounds.left - b.bounds.left);
+            targets.forEach((item, index) => {
+                const deltaY = minY - item.bounds.top;
+                item.table.y += deltaY;
+                let newVisualLeft = item.bounds.left;
+                if (index > 0) {
+                    const prevItem = targets[index - 1];
+                    const prevRight = prevItem.newVisualLeft + prevItem.bounds.width;
+                    if (newVisualLeft < prevRight) newVisualLeft = prevRight;
+                }
+                item.newVisualLeft = newVisualLeft;
+                const deltaX = newVisualLeft - item.bounds.left;
+                item.table.x += deltaX;
+                renderTable(item.table);
+            });
+        }
+
+        function alignLeft() {
+            if (selectedTables.size < 2) return;
+            let targets = [];
+            selectedTables.forEach(id => {
+                const t = tables.find(table => table.id === id);
+                if(t) targets.push({ table: t, bounds: getTableVisualBounds(t) });
+            });
+            const minX = Math.min(...targets.map(t => t.bounds.left));
+            targets.sort((a, b) => a.bounds.top - b.bounds.top);
+            targets.forEach((item, index) => {
+                const deltaX = minX - item.bounds.left;
+                item.table.x += deltaX;
+                let newVisualTop = item.bounds.top;
+                if (index > 0) {
+                    const prevItem = targets[index - 1];
+                    const prevBottom = prevItem.newVisualTop + prevItem.bounds.height;
+                    if (newVisualTop < prevBottom) newVisualTop = prevBottom;
+                }
+                item.newVisualTop = newVisualTop;
+                const deltaY = newVisualTop - item.bounds.top;
+                item.table.y += deltaY;
+                renderTable(item.table);
+            });
+        }
+
+        function distributeHorizontally() {
+            if (selectedTables.size < 3) return;
+            const selectedTableObjects = tables.filter(t => selectedTables.has(t.id)).sort((a, b) => a.x - b.x);
+            const first = selectedTableObjects[0];
+            const last = selectedTableObjects[selectedTableObjects.length - 1];
+            const step = (last.x - first.x) / (selectedTableObjects.length - 1);
+            selectedTableObjects.forEach((table, i) => {
+                table.x = first.x + i * step;
+                renderTable(table);
+            });
+        }
+
+        function distributeVertically() {
+            if (selectedTables.size < 3) return;
+            const selectedTableObjects = tables.filter(t => selectedTables.has(t.id)).sort((a, b) => a.y - b.y);
+            const first = selectedTableObjects[0];
+            const last = selectedTableObjects[selectedTableObjects.length - 1];
+            const step = (last.y - first.y) / (selectedTableObjects.length - 1);
+            selectedTableObjects.forEach((table, i) => {
+                table.y = first.y + i * step;
+                renderTable(table);
+            });
+        }
+
+        // === IMPORT / EXPORT ===
+        function saveLayout() {
+            const data = tables.map(t => ({
+                type: t.numStudents,
+                x: t.x, y: t.y,
+                rotation: t.rotation,
+                students: t.students
+            }));
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'plan_classe.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            alert("Le plan a été téléchargé dans votre dossier par défaut (Téléchargements).");
+        }
+
+        function loadLayout(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    tables = [];
+                    workspace.innerHTML = '';
+                    tableIdCounter = 0;
+                    selectedTables.clear();
+                    data.forEach(info => {
+                        createTable(info.type, info.x, info.y, info.rotation || 0, info.students);
+                    });
+                    alert('Configuration chargée !');
+                } catch (err) {
+                    alert('Erreur : ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // === REPARTITION ELEVES ===
+        
+        /**
+         * Fonction robuste pour lire le presse-papier (HTTP & HTTPS)
+         */
+        async function lirePressePapier() {
+            // 1. Essai moderne (HTTPS / local)
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (text) return text;
+                } catch (err) {
+                    console.warn("Lecture auto du presse-papier bloquée, fallback manuel.", err);
+                }
+            }
+
+            // 2. Fallback manuel (HTTP / Free)
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                Object.assign(overlay.style, {
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 99999,
+                    display: 'flex', justifyContent: 'center', alignItems: 'center',
+                    backdropFilter: 'blur(2px)'
+                });
+
+                const box = document.createElement('div');
+                Object.assign(box.style, {
+                    backgroundColor: 'white', padding: '20px', borderRadius: '10px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.2)', width: '450px',
+                    textAlign: 'center', fontFamily: 'Segoe UI, sans-serif'
+                });
+
+                const title = document.createElement('h3');
+                title.textContent = "📋 Collage manuel requis";
+                title.style.margin = "0 0 10px 0";
+                title.style.color = "#2c3e50";
+
+                const msg = document.createElement('p');
+                msg.textContent = "Le navigateur bloque l'accès automatique au presse-papier sur ce site. Collez vos données (Ctrl+V) ci-dessous puis cliquez sur Valider.";
+                msg.style.fontSize = "0.85em";
+                msg.style.color = "#666";
+
+                const textarea = document.createElement('textarea');
+                Object.assign(textarea.style, {
+                    width: '100%', height: '150px', margin: '10px 0', padding: '10px',
+                    border: '2px solid #ddd', borderRadius: '6px', fontSize: '12px',
+                    boxSizing: 'border-box', resize: 'vertical'
+                });
+                textarea.placeholder = "Collez ici les données copiées depuis Excel ou Pronote...";
+
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = "flex";
+                btnContainer.style.gap = "10px";
+                btnContainer.style.justifyContent = "center";
+                btnContainer.style.marginTop = "10px";
+
+                const btnCancel = document.createElement('button');
+                btnCancel.textContent = "Annuler";
+                Object.assign(btnCancel.style, {
+                    padding: '8px 20px', backgroundColor: '#95a5a6', color: 'white',
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600'
+                });
+
+                const btnOk = document.createElement('button');
+                btnOk.textContent = "Valider les données";
+                Object.assign(btnOk.style, {
+                    padding: '8px 20px', backgroundColor: '#3498db', color: 'white',
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600'
+                });
+
+                const close = (val) => {
+                    document.body.removeChild(overlay);
+                    resolve(val);
+                };
+
+                btnOk.onclick = () => close(textarea.value);
+                btnCancel.onclick = () => close(null);
+                overlay.onclick = (e) => { if (e.target === overlay) close(null); };
+
+                btnContainer.appendChild(btnCancel);
+                btnContainer.appendChild(btnOk);
+                box.appendChild(title);
+                box.appendChild(msg);
+                box.appendChild(textarea);
+                box.appendChild(btnContainer);
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+                textarea.focus();
+            });
+        }
+
+
+        // === REPARTITION ELEVES ===
+        async function distributeStudents() {
+            try {
+                const text = await lirePressePapier();
+                if (!text) return; // Annulé ou vide
+                clipboardData = text;
+                document.getElementById('nameFormatModal').style.display = 'block';
+            } catch (err) {
+                alert('Erreur lecture presse-papier : ' + err);
+            }
+        }
+
+
+        function distributeWithFormat(format) {
+            closeModal('nameFormatModal');
+            if (!clipboardData) return alert('Presse-papiers vide.');
+
+            let lines = clipboardData.trim().split('\n');
+
+            // Nettoyage et filtrage intelligent
+            // 1. Nettoyer les guillemets sur la première ligne pour vérifier l'en-tête
+            if (lines.length > 0) {
+                let firstLineClean = lines[0].trim().replace(/^"|"$/g, '').toLowerCase();
+                // Si c'est un en-tête, on le vire
+                if (firstLineClean.includes('nom') || firstLineClean.includes('eleve') || firstLineClean.includes('élève') || firstLineClean === 'classe') {
+                    lines.shift();
+                }
+            }
+
+            const studentsRaw = lines.filter(line => {
+                const t = line.trim();
+                // On garde la ligne si elle n'est pas vide et ne ressemble pas à une info parasite (parenthèses seules ?)
+                // Le filtre original excluait tout ce qui avait des parenthèses. 
+                // On va assouplir : on nettoie d'abord les guillemets
+                return t.length > 0;
+            });
+
+            const students = studentsRaw.map(line => {
+                // Nettoyage global des guillemets pour chaque élève
+                let cleanLine = line.trim().replace(/^"|"$/g, ''); // Enlever guillemets début/fin
+                cleanLine = cleanLine.replace(/"/g, ''); // Enlever guillemets restants au cas où
+                return formatStudentName(cleanLine, format);
+            }).filter(s => s && !s.includes('(') && !s.includes(')')); 
+            // On garde le filtre parenthèses APRES nettoyage si c'est vraiment voulu pour exclure les lignes parasites Pronote
+
+            if (!students.length) return alert('Aucun élève trouvé.');
+
+            shuffle(students);
+
+            tables.forEach(t => t.students = Array(t.numStudents).fill(''));
+            const allSlots = [];
+            tables.forEach(table => {
+                for (let i = 0; i < table.numStudents; i++) allSlots.push({ table, index: i });
+            });
+
+            if (!allSlots.length) return alert('Aucune table.');
+            shuffle(allSlots);
+
+            for (let i = 0; i < Math.min(students.length, allSlots.length); i++) {
+                allSlots[i].table.students[allSlots[i].index] = students[i];
+            }
+            tables.forEach(t => renderTable(t));
+            alert(`${Math.min(students.length, allSlots.length)} élèves placés.`);
+        }
+
+function formatStudentName(fullName, format) {
+            const clean = fullName.trim().replace(/"/g, '');
+            if (format === 'abbreviated') {
+                const parts = clean.split(/\s+/);
+                if (parts.length < 2) return clean;
+                return `${parts[0][0].toUpperCase()}. ${parts.slice(1).join(' ')}`;
+            }
+            return clean;
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // === EXPORT PDF OPTIMISÉ ===
+        async function exportToPDF() {
+            if (tables.length === 0) return alert('Espace vide.');
+
+            const tempContainer = document.createElement('div');
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-10000px';
+            tempContainer.style.top = '0px';
+            tempContainer.style.backgroundColor = 'white';
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            tables.forEach(table => {
+                const el = document.getElementById(`table-${table.id}`);
+                if (el) {
+                    const rect = el.getBoundingClientRect();
+                    const containerRect = workspaceContainer.getBoundingClientRect();
+                    const tableLeft = rect.left + workspaceContainer.scrollLeft - containerRect.left;
+                    const tableTop = rect.top + workspaceContainer.scrollTop - containerRect.top;
+                    minX = Math.min(minX, tableLeft); minY = Math.min(minY, tableTop);
+                    maxX = Math.max(maxX, tableLeft + rect.width); maxY = Math.max(maxY, tableTop + rect.height);
+                }
+            });
+
+            const contentWidth = maxX - minX + 20;
+            const contentHeight = maxY - minY + 20;
+            tempContainer.style.width = contentWidth + 'px';
+            tempContainer.style.height = contentHeight + 'px';
+
+            tables.forEach(table => {
+                const el = document.getElementById(`table-${table.id}`);
+                if (el) {
+                    const clone = el.cloneNode(true);
+                    clone.classList.remove('selected');
+                    clone.querySelectorAll('.is-editing').forEach(c => c.classList.remove('is-editing'));
+                    const rect = el.getBoundingClientRect();
+                    const containerRect = workspaceContainer.getBoundingClientRect();
+                    const tableLeft = rect.left + workspaceContainer.scrollLeft - containerRect.left - minX + 10;
+                    const tableTop = rect.top + workspaceContainer.scrollTop - containerRect.top - minY + 10;
+                    clone.style.left = tableLeft + 'px';
+                    clone.style.top = tableTop + 'px';
+                    tempContainer.appendChild(clone);
+                }
+            });
+
+            document.body.appendChild(tempContainer);
+            try {
+                const canvas = await html2canvas(tempContainer, { backgroundColor: '#ffffff', scale: 2, logging: false });
+                document.body.removeChild(tempContainer);
+
+                const { jsPDF } = window.jspdf;
+                const pdfW = 297; const pdfH = 210; const margin = 10;
+                const availableW = pdfW - 2 * margin; const availableH = pdfH - 2 * margin;
+                const canvasRatio = canvas.width / canvas.height;
+                const pdfRatio = availableW / availableH;
+                let finalW, finalH;
+                if (canvasRatio > pdfRatio) { finalW = availableW; finalH = availableW / canvasRatio; }
+                else { finalH = availableH; finalW = availableH * canvasRatio; }
+
+                const pdf = new jsPDF('landscape', 'mm', 'a4');
+                const imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', margin + (availableW - finalW) / 2, margin + (availableH - finalH) / 2, finalW, finalH);
+                pdf.save('plan_classe.pdf');
+                alert('PDF généré !');
+            } catch (err) {
+                document.body.removeChild(tempContainer);
+                alert('Erreur PDF : ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
