@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Éditeur de Flashcards V10.12 - Audio Mobile & Studio Intégré</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+    <style>
+        :root { --bg-color: #f0f2f5; --primary: #4a90e2; --success: #2ecc71; --dark: #2c3e50; --secondary: #7f8c8d; --warning: #f1c40f; --purple: #9b59b6; --info: #3498db; }
+        
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; transition: background 0.3s; }
+        body.dragging * { cursor: grabbing !important; user-select: none; }
+
+        .toolbar { flex-shrink: 0; display: flex; gap: 10px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 15px; flex-wrap: wrap; align-items: center; }
+        button, .file-upload-label { padding: 8px 12px; background-color: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
+        button:hover, .file-upload-label:hover { filter: brightness(1.1); }
+        button.danger { background-color: #e74c3c; } button.success { background-color: var(--success); }
+        button.dark { background-color: var(--dark); } button.secondary { background-color: var(--secondary); }
+        button.warning { background-color: var(--warning); color: #333; } button.info { background-color: var(--info); }
+        input[type="file"] { display: none; }
+        
+        #app-container { display: flex; flex-grow: 1; gap: 20px; overflow: hidden; }
+        
+        #sidebar { width: 220px; flex-shrink: 0; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .thumbnail { padding: 10px; border: 2px solid transparent; border-radius: 6px; background: var(--bg-color); cursor: pointer; font-size: 13px; font-weight: bold; color: var(--dark); transition: 0.2s; position: relative; }
+        .thumbnail:hover { border-color: #ccc; }
+        .thumbnail.active { border-color: var(--primary); background: #e3f2fd; }
+        .thumbnail-preview { margin-top: 6px; height: 30px; background: white; border-radius: 4px; border: 1px solid #ddd; font-size: 10px; color: #666; display: flex; align-items: center; justify-content: center; padding: 2px 5px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+        
+        #main-editor { flex-grow: 1; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; padding-bottom: 40px; }
+        
+        .card-editor { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 15px; position: relative; max-width: 800px; width: 100%; }
+        .card-header { display: flex; justify-content: center; gap: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; font-weight: bold; font-size: 18px; color: var(--dark); }
+        .card-sides { display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; }
+        .card-side { display: flex; flex-direction: column; gap: 10px; align-items: center; width: 320px; }
+        
+        .card-preview { border: 2px solid #ccc; border-radius: 10px; overflow: hidden; background: white; box-sizing: border-box; display: flex; position: relative; }
+        .card-preview.landscape { width: 88mm; height: 63mm; }
+        .card-preview.portrait { width: 63mm; height: 88mm; }
+        
+        .img-wrapper { overflow: hidden; display: flex; justify-content: center; align-items: center; position: relative; }
+        .img-wrapper img { width: 100%; height: 100%; cursor: grab; }
+        .img-wrapper img:active { cursor: grabbing; }
+
+        .text-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; overflow: hidden; padding: 10px; box-sizing: border-box; }
+        .text-wrapper { width: 100%; text-align: center; font-weight: bold; line-height: 1.2; word-break: normal; overflow-wrap: normal; border-radius: 4px;}
+        .text-wrapper:focus { outline: none; background: rgba(240, 248, 255, 0.5); }
+        
+        .latex-inline { cursor: pointer; display: inline-block; padding: 0 4px; border-radius: 4px; transition: background 0.2s; }
+        .latex-inline:hover { background: rgba(0,0,0,0.05); outline: 1px dashed #ccc; }
+
+        .drawing-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+        .audio-play-icon { position: absolute; bottom: 10px; right: 10px; background: rgba(255, 255, 255, 0.9); border: 2px solid var(--primary); border-radius: 50%; width: 32px; height: 32px; display: flex; justify-content: center; align-items: center; cursor: grab; font-size: 16px; z-index: 30; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: background 0.2s, color 0.2s; color: var(--primary); user-select: none; }
+        .audio-play-icon:hover { transform: scale(1.05); background: var(--primary); color: white; }
+        .audio-play-icon:active { cursor: grabbing; }
+
+        .layout-top { flex-direction: column; } .layout-top .img-wrapper, .layout-top .text-container { width: 100%; height: 50%; }
+        .layout-bottom { flex-direction: column-reverse; } .layout-bottom .img-wrapper, .layout-bottom .text-container { width: 100%; height: 50%; }
+        .layout-left { flex-direction: row; } .layout-left .img-wrapper, .layout-left .text-container { width: 50%; height: 100%; }
+        .layout-right { flex-direction: row-reverse; } .layout-right .img-wrapper, .layout-right .text-container { width: 50%; height: 100%; }
+        .layout-bg { display: block; }
+        .layout-bg .img-wrapper { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1; }
+        .layout-bg .img-wrapper img { opacity: 0.25; }
+        .layout-bg .text-container { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2; }
+
+        .controls-row { display: flex; gap: 4px; justify-content: center; width: 100%; flex-wrap: wrap; align-items: center; }
+        .color-btn { width: 16px; height: 16px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; box-sizing: border-box; }
+        .color-btn.active { border-color: #fff; outline: 2px solid #333; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
+        .action-btns { position: absolute; top: 15px; right: 15px; display: flex; gap: 5px; }
+        
+        .mini-btn { padding: 4px 6px; font-size: 11px; background: #eee; color: #333; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; }
+        .mini-btn:hover { background: #ddd; }
+        .mini-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .img-adjust { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; background: #f9f9f9; padding: 5px; border-radius: 5px; width: 100%; box-sizing: border-box; border: 1px solid #eee; }
+
+        #drawing-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; }
+        .drawing-toolbar { background: white; padding: 10px 20px; border-radius: 8px; display: flex; gap: 15px; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); flex-wrap: wrap; justify-content: center; max-width: 95%; }
+        .drawing-workspace { position: relative; border: 3px solid #ccc; border-radius: 10px; background: white; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        
+        .drawing-workspace.landscape { width: 880px; height: 630px; max-width: 90vw; max-height: calc(90vw * 63 / 88); }
+        .drawing-workspace.portrait { width: 630px; height: 880px; max-width: calc(80vh * 63 / 88); max-height: 80vh; }
+        
+        #drawing-bg-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; z-index: 20; touch-action: none; }
+        
+        .tool-group { display: flex; gap: 5px; align-items: center; border-right: 1px solid #ccc; padding-right: 15px; }
+        .tool-group:last-child { border: none; padding: 0; }
+        
+        .emoji-scroll-grid { display: grid; grid-template-rows: repeat(2, 1fr); grid-auto-flow: column; gap: 4px; max-width: 320px; overflow-x: auto; padding-bottom: 5px; }
+        .emoji-scroll-grid::-webkit-scrollbar { height: 6px; }
+        .emoji-scroll-grid::-webkit-scrollbar-thumb { background: #bbb; border-radius: 3px; }
+        .emoji-scroll-grid::-webkit-scrollbar-track { background: #f0f0f0; border-radius: 3px; }
+
+        .emoji-btn { font-size: 22px; cursor: pointer; padding: 2px; border-radius: 5px; border: 2px solid transparent; background: transparent; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; transition: 0.1s;}
+        .emoji-btn:hover { background: #eee; transform: scale(1.1); }
+        .emoji-btn.active { border-color: var(--primary); background: #e3f2fd; }
+
+        body.preview-mode { background: #d5d8dc; }
+        body.preview-mode .toolbar button:not(.preview-btn), body.preview-mode .toolbar .file-upload-label { display: none; }
+        body.preview-mode .controls-row, body.preview-mode .action-btns, body.preview-mode .card-header input, body.preview-mode .card-header label, body.preview-mode .img-adjust, body.preview-mode .brush-btn, body.preview-mode .media-controls { display: none; }
+        body.preview-mode .text-wrapper { pointer-events: none; }
+        body.preview-mode .img-wrapper img { pointer-events: none; }
+        body.preview-mode .card-editor { box-shadow: none; background: transparent; padding: 0; margin-top: 50px;}
+        body.preview-mode .audio-play-icon { cursor: pointer; }
+
+        /* --- MODALES --- */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        .modal-box { background: white; padding: 25px; border-radius: 10px; max-width: 750px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow-y: auto; max-height: 90vh; line-height: 1.5; }
+        .modal-box h2 { margin-top: 0; color: var(--dark); border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+        
+        .latex-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .latex-table th, .latex-table td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: middle; }
+        .latex-table th { background-color: #f8f9fa; font-weight: bold; }
+        code.latex-code { background: #f0f2f5; padding: 4px 8px; border-radius: 4px; color: #e74c3c; font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; }
+
+        .help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .help-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; }
+        .help-card h4 { margin-top: 0; margin-bottom: 10px; color: var(--primary); display: flex; align-items: center; gap: 8px;}
+        .help-card ul { margin: 0; padding-left: 20px; font-size: 13.5px; color: #333; }
+        .help-card li { margin-bottom: 5px; }
+
+        /* Signature Footer */
+        .footer-signature { position: fixed; bottom: 10px; right: 15px; font-size: 12px; color: #95a5a6; font-style: italic; z-index: 9999; pointer-events: none; }
+
+        #print-container { display: none; }
+        @media print {
+            @page { size: A4; margin: 0; }
+            .toolbar, #app-container, #drawing-modal, .modal-overlay, .footer-signature { display: none !important; }
+            body { background: white; padding: 0; margin: 0; }
+            #print-container { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            .print-page { display: grid; grid-template-columns: repeat(3, 63mm); grid-template-rows: repeat(3, 88mm); gap: 2mm; justify-content: center; align-content: center; height: 100vh; page-break-after: always; box-sizing: border-box; padding: 10mm; }
+            .print-card { border: 1px dashed #999; box-sizing: border-box; overflow: hidden; border-radius: 4mm; display: flex; position: relative; }
+            .print-card.landscape-print { transform: rotate(90deg); transform-origin: center; width: 88mm; height: 63mm; margin-top: 12.5mm; margin-left: -12.5mm; }
+            .print-card.portrait-print { width: 63mm; height: 88mm; }
+            .print-card .img-wrapper { overflow: hidden; display: flex; justify-content: center; align-items: center; position: relative; }
+            .print-card .img-wrapper img { width: 100%; height: 100%; object-fit: contain; }
+            .print-card .text-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; padding: 10px; box-sizing: border-box; overflow: hidden; }
+            .print-card .text-wrapper { text-align: center; font-weight: bold; line-height: 1.2; word-break: normal; overflow-wrap: normal; }
+            .audio-play-icon { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <button class="success" onclick="addCard()">➕ Ajouter Flashcard</button>
+        <button class="dark preview-btn" onclick="togglePreview()">👁️ Mode Aperçu</button>
+        <button class="info" onclick="openHelpModal()">❓ Aide</button>
+        <div style="width: 1px; height: 20px; background: #ccc; margin: 0 10px;"></div>
+        <button onclick="exportJSON()">💾 Sauvegarder sous...</button>
+        <label class="file-upload-label">📂 Charger <input type="file" accept=".json" onchange="loadJSON(event)"></label>
+        <label class="file-upload-label" style="background:#8e44ad;">📄 Import CSV <input type="file" accept=".csv" onchange="importCSV(event)"></label>
+        <button class="danger" onclick="clearAll()" title="Tout effacer">🗑️ Vider</button>
+        <div style="flex-grow: 1;"></div>
+        <button class="secondary" onclick="printPDF('classic')">🖨️ Imprimer (Classique)</button>
+        <button class="dark" onclick="printPDF('mirror')">🖨️ Imprimer (Recto-Verso)</button>
+    </div>
+
+    <div id="app-container">
+        <div id="sidebar"></div>
+        <div id="main-editor"></div>
+    </div>
+
+    <div id="drawing-modal">
+        <div class="drawing-toolbar">
+            <div class="tool-group">
+                <button class="mini-btn active" id="tool-pen" onclick="setDrawMode('pen')">🖌️ Pinceau</button>
+                <button class="mini-btn" id="tool-eraser" onclick="setDrawMode('eraser')">🧹 Gomme</button>
+            </div>
+            <div class="tool-group" id="draw-colors"></div>
+            <div class="tool-group" style="display: flex; flex-direction: column; align-items: center;">
+                <span style="font-size:10px; font-weight:bold;">Taille</span>
+                <input type="range" id="draw-size" min="2" max="30" value="5" style="width: 70px;" onchange="updateDrawSize()">
+            </div>
+            
+            <div class="tool-group">
+                <div class="emoji-scroll-grid" id="emoji-library"></div>
+            </div>
+
+            <div class="tool-group" style="flex-direction: column; gap: 3px;">
+                <button class="danger mini-btn" onclick="clearCanvas()">🗑️ Tout effacer</button>
+                <button class="secondary mini-btn" onclick="closeDrawingModal()">Annuler</button>
+            </div>
+            <div class="tool-group" style="border: none;">
+                <button class="success" onclick="saveDrawingAndClose()" style="padding: 10px 20px; font-size:14px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">💾 Valider</button>
+            </div>
+        </div>
+        <div class="drawing-workspace" id="drawing-workspace">
+            <div id="drawing-bg-container"></div>
+            <canvas id="drawing-canvas"></canvas>
+        </div>
+    </div>
+
+    <div id="help-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2>📖 Guide d'utilisation de l'Éditeur</h2>
+            <div class="help-grid">
+                <div class="help-card">
+                    <h4>🖼️ Gestion des Images</h4>
+                    <ul>
+                        <li><b>Importer :</b> Utilisez le bouton "Ajouter une image".</li>
+                        <li><b>Coller (Ctrl+V) :</b> Faites une capture d'écran, cliquez dans la zone de texte de la face voulue, et faites `Ctrl+V`.</li>
+                        <li><b>Déplacer :</b> Cliquez et glissez l'image.</li>
+                        <li><b>Zoomer :</b> Utilisez la molette de la souris sur l'image.</li>
+                        <li><b>Ajustement :</b> Le bouton 🔄 permet de choisir entre voir toute l'image ou remplir la zone.</li>
+                    </ul>
+                </div>
+                <div class="help-card">
+                    <h4>🎤 Gestion de l'Audio</h4>
+                    <ul>
+                        <li><b>Importer :</b> Utilisez un fichier .mp3 ou .wav.</li>
+                        <li><b>Enregistrer :</b> Utilisez votre micro directement via le bouton 🎤.</li>
+                        <li><b>Positionner l'icône :</b> Cliquez et faites glisser l'icône 🔊 n'importe où sur la carte.</li>
+                    </ul>
+                </div>
+                <div class="help-card">
+                    <h4>🔤 Texte & Mathématiques</h4>
+                    <ul>
+                        <li><b>Saisie :</b> Le texte s'ajuste automatiquement à la taille de la carte.</li>
+                        <li><b>Couleur/Format :</b> Sélectionnez du texte puis cliquez sur une couleur ou un bouton (Gras, Italique...).</li>
+                        <li><b>LaTeX :</b> Cliquez sur le bouton <b>∑</b> pour insérer une formule mathématique ou chimique.</li>
+                    </ul>
+                </div>
+                <div class="help-card">
+                    <h4>🖌️ Studio de Dessin</h4>
+                    <ul>
+                        <li><b>Pinceau & Gomme :</b> Dessinez librement par-dessus vos images ou textes.</li>
+                        <li><b>Tampons :</b> Utilisez la bibliothèque d'émojis pour marquer la carte d'un simple clic.</li>
+                    </ul>
+                </div>
+            </div>
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="primary" onclick="closeHelpModal()">J'ai compris !</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="latex-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2>Aide LaTeX (Mathématiques & Chimie)</h2>
+            <p style="color: #666; font-size: 14px; margin-top:-5px;">Cliquez sur <b>∑</b> pour écrire une équation, puis double-cliquez dessus pour la modifier.</p>
+            <table class="latex-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th>Code LaTeX</th>
+                        <th style="text-align: center;">Résultat</th>
+                    </tr>
+                </thead>
+                <tbody id="latex-help-tbody"></tbody>
+            </table>
+            <div style="text-align: right;">
+                <button class="secondary" onclick="closeLatexHelp()">Fermer l'aide</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="print-container"></div>
+    
+    <div class="footer-signature">Espinosa T. Lycée Albert Einstein</div>
+
+    <script>
+        const colors = ["#000000", "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2", "#f1c40f", "#ffffff"];
+        
+        const stampLibrary = [
+            "✅", "❌", "⭕", "⭐", "🌟", "❤️", "💯", "❓", "❗", "💡", "🎓", "🏆",
+            "😀", "😁", "😂", "😉", "😊", "😍", "😜", "🤔", "🤫", "😴", "🤯", "🥳", "😎", "😭", "😡", "🤢", "🤡", "👻", "👽", "🤖",
+            "🐶", "🐱", "🐭", "🐰", "🦊", "🐻", "🐼", "🐸", "🐵", "🦄", "🦋", "🦖",
+            "🍎", "🍕", "⚽", "🏀", "🚗", "🚀", "🎨", "🎵", "⚡", "🔥", "🌈", "☀️", "🌙", "🌍"
+        ];
+
+        const latexHelpData = [
+            { desc: "Fraction", code: "\\frac{a}{b}" },
+            { desc: "Indice (ex: Eau)", code: "H_2O" },
+            { desc: "Exposant (ex: Énergie)", code: "E = mc^2" },
+            { desc: "Indice & Exposant (Ions / Isotopes)", code: "Cu^{2+} \\quad {}^{14}_{6}C" },
+            { desc: "Flèche de réaction (Chimie)", code: "\\longrightarrow" },
+            { desc: "Vecteur", code: "\\vec{v} \\quad \\overrightarrow{AB}" },
+            { desc: "Intégrale", code: "\\int_{a}^{b} x \\, dx" },
+            { desc: "Somme", code: "\\sum_{i=1}^{n} x_i" },
+            { desc: "Racine carrée", code: "\\sqrt{x^2 + 1}" },
+            { desc: "Lettres Grecques", code: "\\alpha, \\beta, \\pi, \\Delta" }
+        ];
+
+        let deck = [];
+        let isPreviewMode = false;
+        let selectedCardId = null; 
+
+        let isDraggingImg = false, dragStartX = 0, dragStartY = 0, imgStartPosX = 0, imgStartPosY = 0, activeDragCardId = null, activeDragSide = null;
+        let isDraggingAudio = false, audioDragStartX = 0, audioDragStartY = 0, audioStartPosX = 0, audioStartPosY = 0, activeAudioDragCardId = null, activeAudioDragSide = null, audioDraggedDistance = 0;
+        let drawCanvas = document.getElementById('drawing-canvas'), drawCtx = drawCanvas.getContext('2d', { willReadFrequently: true });
+        let isDrawing = false, drawMode = 'pen', currentDrawColor = colors[1], currentDrawSize = 5, currentEmoji = '✅', drawTargetCardId = null, drawTargetSide = null;
+        let mediaRecorder = null, audioChunks = [], recordingTarget = null;
+
+        // --- GESTION DU COLLER (PASTE) POUR LES IMAGES ---
+        document.addEventListener('paste', function(e) {
+            if (isPreviewMode) return;
+
+            let targetSide = null;
+            let targetId = selectedCardId;
+
+            const activeEl = document.activeElement;
+            if (activeEl && activeEl.id && activeEl.id.startsWith('editor_')) {
+                const parts = activeEl.id.split('_');
+                if (parts.length >= 3) {
+                    targetId = parts[1];
+                    targetSide = parts[2]; 
+                }
+            }
+
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let imageItem = null;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf("image") !== -1) { imageItem = items[i]; break; }
+            }
+
+            if (imageItem) {
+                e.preventDefault(); 
+                if (!targetSide) {
+                    alert("☝️ Veuillez d'abord cliquer dans la zone de texte (Face Avant ou Arrière) de la carte pour indiquer où coller l'image.");
+                    return;
+                }
+                const file = imageItem.getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                        let width = img.width; let height = img.height; const maxSize = 800; 
+                        if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; }
+                        else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+                        canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const card = deck.find(c => c.id === targetId);
+                        if(card) { card[targetSide].zoom = 1; card[targetSide].posX = 0; card[targetSide].posY = 0; card[targetSide].imgFit = 'contain'; }
+                        updateField(targetId, targetSide, 'image', canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function initData() {
+            try { document.execCommand('styleWithCSS', false, true); } catch(e) {}
+            const saved = localStorage.getItem('flashcards_v4') || localStorage.getItem('flashcards_v3');
+            if (saved) { 
+                const loadedDeck = JSON.parse(saved);
+                deck = loadedDeck.map(c => {
+                    if(!c.recto.html) c.recto.html = c.recto.text || "";
+                    if(!c.verso.html) c.verso.html = c.verso.text || "";
+                    if(!c.recto.layout) c.recto.layout = 'top';
+                    if(!c.verso.layout) c.verso.layout = 'top';
+                    if(c.recto.zoom === undefined) c.recto.zoom = 1; 
+                    c.recto.posX = (c.recto.posX === 50) ? 0 : (c.recto.posX || 0); c.recto.posY = (c.recto.posY === 50) ? 0 : (c.recto.posY || 0);
+                    if(c.verso.zoom === undefined) c.verso.zoom = 1; 
+                    c.verso.posX = (c.verso.posX === 50) ? 0 : (c.verso.posX || 0); c.verso.posY = (c.verso.posY === 50) ? 0 : (c.verso.posY || 0);
+                    if(c.recto.imgFit === undefined) c.recto.imgFit = 'contain'; if(c.verso.imgFit === undefined) c.verso.imgFit = 'contain';
+                    if(c.recto.drawing === undefined) c.recto.drawing = null; if(c.verso.drawing === undefined) c.verso.drawing = null;
+                    if(c.recto.audio === undefined) c.recto.audio = null; if(c.verso.audio === undefined) c.verso.audio = null;
+                    if(c.recto.audioX === undefined) c.recto.audioX = 0; if(c.recto.audioY === undefined) c.recto.audioY = 0;
+                    if(c.verso.audioX === undefined) c.verso.audioX = 0; if(c.verso.audioY === undefined) c.verso.audioY = 0;
+                    return c;
+                });
+            } else { deck.push(createNewCard()); }
+            if (deck.length > 0) selectedCardId = deck[0].id;
+            
+            initDrawingTools(); initLatexHelp(); saveState(); renderApp();
+        }
+
+        function initLatexHelp() {
+            const tbody = document.getElementById('latex-help-tbody');
+            tbody.innerHTML = latexHelpData.map(item => {
+                let rendered = "";
+                try { rendered = katex.renderToString(item.code, { throwOnError: false }); } catch(e) { rendered = "Erreur"; }
+                return `<tr><td>${item.desc}</td><td><code class="latex-code">${item.code}</code></td><td style="font-size: 1.2em; text-align: center;">${rendered}</td></tr>`;
+            }).join('');
+        }
+
+        function openHelpModal() { document.getElementById('help-modal').style.display = 'flex'; }
+        function closeHelpModal() { document.getElementById('help-modal').style.display = 'none'; }
+        function openLatexHelp() { document.getElementById('latex-modal').style.display = 'flex'; }
+        function closeLatexHelp() { document.getElementById('latex-modal').style.display = 'none'; }
+
+        function saveState() { try { localStorage.setItem('flashcards_v4', JSON.stringify(deck)); } catch (e) { console.warn("Quota LocalStorage dépassé"); } }
+
+        function clearAll() {
+            if(confirm("Effacer toutes les cartes ? Action irréversible.")) {
+                deck = [createNewCard()]; selectedCardId = deck[0].id; localStorage.removeItem('flashcards_v4'); renderApp();
+            }
+        }
+
+        function createNewCard(rectoHtml = "", versoHtml = "") {
+            return {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                orientation: 'landscape',
+                recto: { html: rectoHtml, image: null, color: "#000000", fontSize: "24px", layout: 'top', zoom: 1, posX: 0, posY: 0, imgFit: 'contain', drawing: null, audio: null, audioX: 0, audioY: 0 },
+                verso: { html: versoHtml, image: null, color: "#000000", fontSize: "24px", layout: 'top', zoom: 1, posX: 0, posY: 0, imgFit: 'contain', drawing: null, audio: null, audioX: 0, audioY: 0 },
+                srs: { step: 0 }
+            };
+        }
+
+        function addCard() { const newCard = createNewCard(); deck.push(newCard); selectedCardId = newCard.id; saveState(); renderApp(); scrollToBottomSidebar(); }
+        function deleteCard(id) { 
+            const index = deck.findIndex(c => c.id === id); deck = deck.filter(c => c.id !== id); 
+            if (deck.length === 0) { const newCard = createNewCard(); deck.push(newCard); selectedCardId = newCard.id; } 
+            else if (selectedCardId === id) { selectedCardId = deck[Math.max(0, index - 1)].id; }
+            saveState(); renderApp(); 
+        }
+        function duplicateCard(id) {
+            const cardToCopy = deck.find(c => c.id === id);
+            if (cardToCopy) {
+                const newCard = JSON.parse(JSON.stringify(cardToCopy)); newCard.id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                const index = deck.findIndex(c => c.id === id); deck.splice(index + 1, 0, newCard); selectedCardId = newCard.id;
+                saveState(); renderApp();
+            }
+        }
+        function selectCard(id) { selectedCardId = id; renderApp(); }
+        function scrollToBottomSidebar() { setTimeout(() => { const sidebar = document.getElementById('sidebar'); sidebar.scrollTop = sidebar.scrollHeight; }, 50); }
+
+        function updateField(id, side, field, value) {
+            const card = deck.find(c => c.id === id);
+            if (card) {
+                if(field === 'orientation') card.orientation = value; else card[side][field] = value;
+                saveState();
+                if(field !== 'html' && field !== 'fontSize' && field !== 'zoom' && field !== 'posX' && field !== 'posY' && field !== 'imgFit' && field !== 'audioX' && field !== 'audioY') renderApp(); 
+                else if (field === 'html' || field === 'image' || field === 'drawing' || field === 'audio') updateThumbnailLive(id);
+            }
+        }
+
+        function toggleImgFit(id, side) { const card = deck.find(c => c.id === id); if (card) { card[side].imgFit = card[side].imgFit === 'cover' ? 'contain' : 'cover'; saveState(); renderApp(); } }
+
+        function updateThumbnailLive(id) {
+            const card = deck.find(c => c.id === id); const thumbDisplay = document.getElementById(`thumb_preview_${id}`);
+            if (card && thumbDisplay) {
+                let plainText = card.recto.html.replace(/<[^>]*>?/gm, '').trim(); let icons = "";
+                if (card.recto.image) icons += '🖼️ '; if (card.recto.drawing) icons += '🖌️ '; if (card.recto.audio || card.verso.audio) icons += '🔊 ';
+                thumbDisplay.innerText = icons + (plainText || '...');
+            }
+        }
+
+        function execCmd(command, cardId, side) { document.execCommand(command, false, null); const editor = document.getElementById(`editor_${cardId}_${side}`); updateField(cardId, side, 'html', editor.innerHTML); autoFitHTML(`editor_${cardId}_${side}`, cardId, side); }
+
+        function handleColorClick(event, color, cardId, side) {
+            event.preventDefault(); const selection = window.getSelection(); const editor = document.getElementById(`editor_${cardId}_${side}`);
+            if (editor && selection.rangeCount > 0 && selection.toString().length > 0 && editor.contains(selection.anchorNode)) {
+                document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, color);
+                const card = deck.find(c => c.id === cardId); if (card) { card[side].html = editor.innerHTML; saveState(); updateThumbnailLive(cardId); }
+            } else { updateField(cardId, side, 'color', color); }
+        }
+
+        function autoFitHTML(editorId, cardId, side) {
+            const editor = document.getElementById(editorId); const container = editor.parentElement; const card = deck.find(c => c.id === cardId);
+            if (!editor || !card || !container) return;
+            card[side].html = editor.innerHTML;
+            let minSize = 10, maxSize = 45, currentSize = maxSize; editor.style.fontSize = currentSize + 'px';
+            while ((editor.scrollHeight > container.clientHeight || editor.scrollWidth > container.clientWidth) && currentSize > minSize) { currentSize--; editor.style.fontSize = currentSize + 'px'; }
+            card[side].fontSize = currentSize + 'px'; saveState(); updateThumbnailLive(cardId);
+        }
+
+        function insertMath(cardId, side) {
+            const editor = document.getElementById(`editor_${cardId}_${side}`); editor.focus();
+            const latex = prompt("Entrez votre formule LaTeX (cliquez sur ❓ pour de l'aide) :"); if (!latex) return;
+            try {
+                const rendered = katex.renderToString(latex, { throwOnError: false });
+                const html = `<span class="latex-inline" contenteditable="false" data-latex="${encodeURIComponent(latex)}" ondblclick="editMath(this, '${cardId}', '${side}')" title="Double-clic pour modifier">${rendered}</span>&nbsp;`;
+                document.execCommand('insertHTML', false, html); updateField(cardId, side, 'html', editor.innerHTML); autoFitHTML(`editor_${cardId}_${side}`, cardId, side);
+            } catch (e) { alert("Erreur dans le code LaTeX : " + e.message); }
+        }
+
+        window.editMath = function(el, cardId, side) {
+            const currentLatex = decodeURIComponent(el.getAttribute('data-latex')); const newLatex = prompt("Modifier la formule LaTeX :", currentLatex);
+            if (newLatex === null) return; 
+            if (newLatex.trim() === "") { el.remove(); } else {
+                try { const rendered = katex.renderToString(newLatex, { throwOnError: false }); el.setAttribute('data-latex', encodeURIComponent(newLatex)); el.innerHTML = rendered;
+                } catch(e) { alert("Erreur dans le code LaTeX : " + e.message); }
+            }
+            const editor = document.getElementById(`editor_${cardId}_${side}`); updateField(cardId, side, 'html', editor.innerHTML); autoFitHTML(`editor_${cardId}_${side}`, cardId, side);
+        };
+
+        // --- GESTION AUDIO ---
+        function handleAudioUpload(id, side, event) {
+            const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = function(e) { const card = deck.find(c => c.id === id); if(card) { card[side].audioX = 0; card[side].audioY = 0; } updateField(id, side, 'audio', e.target.result); };
+            reader.readAsDataURL(file);
+        }
+
+        async function toggleRecording(id, side) {
+            if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); mediaRecorder = new MediaRecorder(stream); audioChunks = []; recordingTarget = { id, side };
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' }); const reader = new FileReader();
+                    reader.onloadend = () => { const card = deck.find(c => c.id === recordingTarget.id); if(card) { card[recordingTarget.side].audioX = 0; card[recordingTarget.side].audioY = 0; } updateField(recordingTarget.id, recordingTarget.side, 'audio', reader.result); };
+                    reader.readAsDataURL(audioBlob); stream.getTracks().forEach(track => track.stop());
+                };
+                mediaRecorder.start(); const btn = document.getElementById(`rec_btn_${id}_${side}`); if(btn) { btn.innerHTML = '⏹️ Stop Rec'; btn.classList.remove('warning'); btn.classList.add('danger'); }
+            } catch (err) { alert("Erreur d'accès au microphone : Autorisez l'accès au micro dans votre navigateur."); }
+        }
+
+        function removeAudio(id, side) { updateField(id, side, 'audio', null); }
+        function playAudio(id, side) { const card = deck.find(c => c.id === id); if (card && card[side].audio) { const audio = new Audio(card[side].audio); audio.play().catch(e => alert("Erreur de lecture audio : " + e.message)); } }
+
+        function startAudioDrag(event, id, side) {
+            if (isPreviewMode) { playAudio(id, side); return; }
+            event.preventDefault(); event.stopPropagation(); const card = deck.find(c => c.id === id); if(!card) return;
+            isDraggingAudio = true; activeAudioDragCardId = id; activeAudioDragSide = side; audioDraggedDistance = 0;
+            audioDragStartX = event.touches ? event.touches[0].clientX : event.clientX; audioDragStartY = event.touches ? event.touches[0].clientY : event.clientY;
+            audioStartPosX = parseFloat(card[side].audioX) || 0; audioStartPosY = parseFloat(card[side].audioY) || 0;
+            document.body.classList.add('dragging'); document.addEventListener('mousemove', onAudioDrag); document.addEventListener('touchmove', onAudioDrag, {passive: false}); document.addEventListener('mouseup', stopAudioDrag); document.addEventListener('touchend', stopAudioDrag);
+        }
+
+        function onAudioDrag(event) {
+            if(!isDraggingAudio) return; event.preventDefault(); const card = deck.find(c => c.id === activeAudioDragCardId); if(!card) return;
+            const currentX = event.touches ? event.touches[0].clientX : event.clientX; const currentY = event.touches ? event.touches[0].clientY : event.clientY;
+            const dx = currentX - audioDragStartX; const dy = currentY - audioDragStartY; audioDraggedDistance += Math.abs(dx) + Math.abs(dy);
+            card[activeAudioDragSide].audioX = audioStartPosX + dx; card[activeAudioDragSide].audioY = audioStartPosY + dy;
+            const icon = document.getElementById(`audio_icon_${activeAudioDragCardId}_${activeAudioDragSide}`); if (icon) { icon.style.transform = `translate(${card[activeAudioDragSide].audioX}px, ${card[activeAudioDragSide].audioY}px)`; }
+        }
+
+        function stopAudioDrag(event) {
+            if(!isDraggingAudio) return; isDraggingAudio = false; document.body.classList.remove('dragging');
+            document.removeEventListener('mousemove', onAudioDrag); document.removeEventListener('touchmove', onAudioDrag); document.removeEventListener('mouseup', stopAudioDrag); document.removeEventListener('touchend', stopAudioDrag);
+            if (audioDraggedDistance < 5) { playAudio(activeAudioDragCardId, activeAudioDragSide); } else { saveState(); }
+        }
+
+        // --- GESTION IMAGE ---
+        function handleImageUpload(id, side, event) {
+            const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image(); img.onload = function() {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    let width = img.width; let height = img.height; const maxSize = 800; 
+                    if (width > height && width > maxSize) { height *= maxSize / width; width = maxSize; } else if (height > maxSize) { width *= maxSize / height; height = maxSize; }
+                    canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height);
+                    const card = deck.find(c => c.id === id); if(card) { card[side].zoom = 1; card[side].posX = 0; card[side].posY = 0; card[side].imgFit = 'contain'; }
+                    updateField(id, side, 'image', canvas.toDataURL('image/jpeg', 0.8));
+                }; img.src = e.target.result;
+            }; reader.readAsDataURL(file);
+        }
+
+        function removeImage(id, side) { updateField(id, side, 'image', null); }
+
+        function handleWheelZoom(event, id, side) {
+            if (isPreviewMode) return; event.preventDefault(); const card = deck.find(c => c.id === id); if(!card) return;
+            const delta = Math.sign(event.deltaY) * -0.1; card[side].zoom = Math.max(0.1, Math.min(5, card[side].zoom + delta));
+            document.getElementById(`img_${id}_${side}`).style.transform = `translate(${card[side].posX}px, ${card[side].posY}px) scale(${card[side].zoom})`; saveState();
+        }
+
+        function startImageDrag(event, id, side) {
+            if (isPreviewMode) return; event.preventDefault(); const card = deck.find(c => c.id === id); if(!card) return;
+            isDraggingImg = true; activeDragCardId = id; activeDragSide = side;
+            dragStartX = event.touches ? event.touches[0].clientX : event.clientX; dragStartY = event.touches ? event.touches[0].clientY : event.clientY;
+            imgStartPosX = parseFloat(card[side].posX) || 0; imgStartPosY = parseFloat(card[side].posY) || 0;
+            document.body.classList.add('dragging'); document.addEventListener('mousemove', onImageDrag); document.addEventListener('touchmove', onImageDrag, {passive: false}); document.addEventListener('mouseup', stopImageDrag); document.addEventListener('touchend', stopImageDrag);
+        }
+
+        function onImageDrag(event) {
+            if(!isDraggingImg) return; event.preventDefault(); const card = deck.find(c => c.id === activeDragCardId); if(!card) return;
+            const currentX = event.touches ? event.touches[0].clientX : event.clientX; const currentY = event.touches ? event.touches[0].clientY : event.clientY;
+            const dx = currentX - dragStartX; const dy = currentY - dragStartY;
+            card[activeDragSide].posX = imgStartPosX + dx; card[activeDragSide].posY = imgStartPosY + dy;
+            const imgEl = document.getElementById(`img_${activeDragCardId}_${activeDragSide}`); imgEl.style.transform = `translate(${card[activeDragSide].posX}px, ${card[activeDragSide].posY}px) scale(${card[activeDragSide].zoom})`;
+        }
+
+        function stopImageDrag() {
+            if(!isDraggingImg) return; isDraggingImg = false; document.body.classList.remove('dragging');
+            document.removeEventListener('mousemove', onImageDrag); document.removeEventListener('touchmove', onImageDrag); document.removeEventListener('mouseup', stopImageDrag); document.removeEventListener('touchend', stopImageDrag);
+            saveState();
+        }
+
+        // --- GESTION DESSIN ---
+        function initDrawingTools() {
+            const colorContainer = document.getElementById('draw-colors');
+            colorContainer.innerHTML = colors.map(c => `<div class="color-btn ${c === currentDrawColor ? 'active' : ''}" style="background-color:${c}; border: ${c==='#ffffff' ? '1px solid #ccc' : 'none'};" onclick="setDrawColor('${c}')"></div>`).join('');
+            const emojiLibrary = document.getElementById('emoji-library');
+            emojiLibrary.innerHTML = stampLibrary.map(emoji => `<button class="emoji-btn" onclick="setDrawMode('emoji', '${emoji}', event)">${emoji}</button>`).join('');
+            drawCanvas.addEventListener('mousedown', startDrawing); drawCanvas.addEventListener('mousemove', draw); drawCanvas.addEventListener('mouseup', stopDrawing); drawCanvas.addEventListener('mouseout', stopDrawing);
+            drawCanvas.addEventListener('touchstart', handleTouchStart, {passive: false}); drawCanvas.addEventListener('touchmove', handleTouchMove, {passive: false}); drawCanvas.addEventListener('touchend', stopDrawing);
+        }
+
+        function openDrawingModal(cardId, side) {
+            const card = deck.find(c => c.id === cardId); if (!card) return;
+            drawTargetCardId = cardId; drawTargetSide = side;
+            const workspace = document.getElementById('drawing-workspace'); workspace.className = `drawing-workspace ${card.orientation}`;
+            const scaleFactor = 2; const w = card.orientation === 'landscape' ? 880 : 630; const h = card.orientation === 'landscape' ? 630 : 880;
+            drawCanvas.width = w * scaleFactor; drawCanvas.height = h * scaleFactor;
+            const bgContainer = document.getElementById('drawing-bg-container'); const data = card[side];
+            const scaleRatio = card.orientation === 'landscape' ? (880 / 332) : (630 / 238); const currentFontSize = parseInt(data.fontSize) || 24; const scaledFontSize = Math.round(currentFontSize * scaleRatio) + "px";
+            const imgHtml = data.image ? `<div class="img-wrapper"><img src="${data.image}" style="transform: translate(${data.posX}px, ${data.posY}px) scale(${data.zoom}); object-fit: ${data.imgFit || 'contain'}; width:100%; height:100%;"></div>` : '';
+            bgContainer.innerHTML = `<div class="card-preview ${card.orientation} layout-${data.layout}" style="width:100% !important; height:100% !important; border:none; border-radius:0; box-shadow:none;">${imgHtml}<div class="text-container"><div class="text-wrapper" style="color:${data.color}; font-size:${scaledFontSize};">${data.html}</div></div></div>`;
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            if (card[side].drawing) { const img = new Image(); img.onload = () => { drawCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height); }; img.src = card[side].drawing; }
+            document.getElementById('drawing-modal').style.display = 'flex'; setDrawMode('pen');
+        }
+
+        function closeDrawingModal() { document.getElementById('drawing-modal').style.display = 'none'; }
+
+        function saveDrawingAndClose() {
+            const card = deck.find(c => c.id === drawTargetCardId);
+            if (card) {
+                const blankCanvas = document.createElement('canvas'); blankCanvas.width = drawCanvas.width; blankCanvas.height = drawCanvas.height;
+                if (drawCanvas.toDataURL() === blankCanvas.toDataURL()) { card[drawTargetSide].drawing = null; } else { card[drawTargetSide].drawing = drawCanvas.toDataURL('image/png'); }
+                saveState(); renderApp();
+            }
+            closeDrawingModal();
+        }
+
+        function setDrawColor(color) { currentDrawColor = color; document.querySelectorAll('#draw-colors .color-btn').forEach(btn => { btn.classList.toggle('active', btn.style.backgroundColor === getRGB(color)); }); if(drawMode !== 'pen') setDrawMode('pen'); }
+        function getRGB(hex) { let el = document.createElement('div'); el.style.backgroundColor = hex; return el.style.backgroundColor; }
+        function updateDrawSize() { currentDrawSize = document.getElementById('draw-size').value; }
+
+        function setDrawMode(mode, emoji = null, event = null) {
+            drawMode = mode; document.getElementById('tool-pen').classList.toggle('active', mode === 'pen'); document.getElementById('tool-eraser').classList.toggle('active', mode === 'eraser');
+            document.querySelectorAll('.emoji-btn').forEach(btn => btn.classList.remove('active'));
+            if (mode === 'emoji') { currentEmoji = emoji; if (event && event.currentTarget) { event.currentTarget.classList.add('active'); } }
+        }
+
+        function clearCanvas() { if(confirm("Effacer tout le dessin de cette face ?")) { drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
+        function getCanvasCoordinates(evt) { const rect = drawCanvas.getBoundingClientRect(); const scaleX = drawCanvas.width / rect.width; const scaleY = drawCanvas.height / rect.height; return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY }; }
+        function handleTouchStart(e) { e.preventDefault(); startDrawing(e.touches[0]); }
+        function handleTouchMove(e) { e.preventDefault(); draw(e.touches[0]); }
+
+        function startDrawing(e) {
+            isDrawing = true; const pos = getCanvasCoordinates(e);
+            if (drawMode === 'emoji') { drawCtx.font = `${currentDrawSize * 8}px Arial`; drawCtx.textAlign = "center"; drawCtx.textBaseline = "middle"; drawCtx.globalCompositeOperation = 'source-over'; drawCtx.fillText(currentEmoji, pos.x, pos.y); isDrawing = false; return; }
+            drawCtx.beginPath(); drawCtx.moveTo(pos.x, pos.y);
+        }
+
+        function draw(e) {
+            if (!isDrawing || drawMode === 'emoji') return; const pos = getCanvasCoordinates(e);
+            drawCtx.lineWidth = currentDrawSize * 2; drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
+            if (drawMode === 'eraser') { drawCtx.globalCompositeOperation = 'destination-out'; drawCtx.strokeStyle = 'rgba(0,0,0,1)'; } else { drawCtx.globalCompositeOperation = 'source-over'; drawCtx.strokeStyle = currentDrawColor; }
+            drawCtx.lineTo(pos.x, pos.y); drawCtx.stroke();
+        }
+
+        function stopDrawing() { isDrawing = false; }
+
+        function togglePreview() {
+            isPreviewMode = !isPreviewMode; document.body.classList.toggle('preview-mode', isPreviewMode);
+            const btn = document.querySelector('.preview-btn'); btn.innerHTML = isPreviewMode ? '✏️ Mode Édition' : '👁️ Mode Aperçu';
+        }
+
+        function renderApp() { renderSidebar(); renderMainEditor(); }
+
+        function renderSidebar() {
+            const sidebar = document.getElementById('sidebar'); sidebar.innerHTML = '';
+            deck.forEach((card, index) => {
+                const thumb = document.createElement('div'); thumb.className = `thumbnail ${card.id === selectedCardId ? 'active' : ''}`; thumb.onclick = () => selectCard(card.id);
+                let plainText = card.recto.html.replace(/<[^>]*>?/gm, '').trim(); let icons = "";
+                if(card.recto.image) icons += '🖼️ '; if(card.recto.drawing) icons += '🖌️ '; if(card.recto.audio || card.verso.audio) icons += '🔊 ';
+                thumb.innerHTML = `Carte #${index + 1}<div class="thumbnail-preview" id="thumb_preview_${card.id}">${icons + (plainText || '...')}</div>`;
+                sidebar.appendChild(thumb);
+            });
+        }
+
+        function renderMainEditor() {
+            const container = document.getElementById('main-editor'); container.innerHTML = '';
+            const card = deck.find(c => c.id === selectedCardId); if (!card) return; const index = deck.findIndex(c => c.id === selectedCardId);
+            const cardEl = document.createElement('div'); cardEl.className = 'card-editor';
+            cardEl.innerHTML = `
+                <div class="action-btns"><button class="success" style="padding:5px;" onclick="duplicateCard('${card.id}')" title="Dupliquer">📑 Copier</button><button class="danger" style="padding:5px;" onclick="deleteCard('${card.id}')" title="Supprimer">🗑️</button></div>
+                <div class="card-header">Édition : Carte #${index + 1}</div>
+                <div style="display:flex; justify-content:center; gap:10px;">
+                    <label style="font-size:13px;"><input type="radio" name="ori_${card.id}" onchange="updateField('${card.id}', null, 'orientation', 'landscape')" ${card.orientation === 'landscape' ? 'checked' : ''}> Paysage (88x63)</label>
+                    <label style="font-size:13px;"><input type="radio" name="ori_${card.id}" onchange="updateField('${card.id}', null, 'orientation', 'portrait')" ${card.orientation === 'portrait' ? 'checked' : ''}> Portrait (63x88)</label>
+                </div>
+                <div class="card-sides">${generateSideHTML(card, 'recto', 'Face Avant (Question)')}${generateSideHTML(card, 'verso', 'Face Arrière (Réponse)')}</div>
+            `;
+            container.appendChild(cardEl);
+            setTimeout(() => { autoFitHTML(`editor_${card.id}_recto`, card.id, 'recto'); autoFitHTML(`editor_${card.id}_verso`, card.id, 'verso'); }, 10);
+        }
+
+        function generateSideHTML(card, side, title) {
+            const data = card[side];
+            const imgHTML = data.image ? `<div class="img-wrapper"><img id="img_${card.id}_${side}" src="${data.image}" style="transform: translate(${data.posX}px, ${data.posY}px) scale(${data.zoom}); object-fit: ${data.imgFit || 'contain'}; width:100%; height:100%;" onmousedown="startImageDrag(event, '${card.id}', '${side}')" ontouchstart="startImageDrag(event, '${card.id}', '${side}')" onwheel="handleWheelZoom(event, '${card.id}', '${side}')" title="Molette = Zoomer | Glisser = Déplacer"></div>` : '';
+            const drawHTML = data.drawing ? `<img class="drawing-layer" src="${data.drawing}">` : '';
+            const colorsHTML = colors.map(c => `<div class="color-btn ${data.color === c ? 'active' : ''}" style="background-color:${c}; border: ${c==='#ffffff' ? '1px solid #ccc' : 'none'};" onmousedown="handleColorClick(event, '${c}', '${card.id}', '${side}')"></div>`).join('');
+            const imgControls = data.image ? `<div class="img-adjust media-controls" style="background:transparent; border:none; margin-top:0;"><span style="color:#666; font-style:italic; font-size:10px;">💡 Molette = Zoom | Glisser = Déplacer</span><button class="danger mini-btn" style="width:100%; margin-top:2px;" onclick="removeImage('${card.id}', '${side}')">🗑️ Supprimer l'image</button></div>` : '';
+            const audioControls = data.audio ? `<div class="media-controls" style="display:flex; gap:5px; width:100%;"><button class="primary" style="flex:1; padding:5px 5px; font-size:11px;" onclick="playAudio('${card.id}', '${side}')">▶️ Écouter l'audio</button><button class="danger" style="padding:5px 8px; font-size:11px;" onclick="removeAudio('${card.id}', '${side}')" title="Supprimer l'audio">🗑️</button></div>` : `<div class="media-controls" style="display:flex; gap:5px; width:100%;"><label class="file-upload-label" style="flex:1; font-size:11px; padding:5px; text-align:center; background:var(--purple); box-sizing:border-box;">📂 Importer un Audio <input type="file" accept="audio/*" onchange="handleAudioUpload('${card.id}', '${side}', event)"></label><button id="rec_btn_${card.id}_${side}" class="warning rec-btn" style="flex:1; font-size:11px; padding:5px;" onclick="toggleRecording('${card.id}', '${side}')">🎤 Enregistrer</button></div>`;
+            const audioPlayIcon = data.audio ? `<div id="audio_icon_${card.id}_${side}" class="audio-play-icon" style="transform: translate(${data.audioX}px, ${data.audioY}px);" onmousedown="startAudioDrag(event, '${card.id}', '${side}')" ontouchstart="startAudioDrag(event, '${card.id}', '${side}')" title="Clic pour écouter | Glisser pour déplacer">🔊</div>` : '';
+
+            return `
+                <div class="card-side">
+                    <div style="font-weight:bold; color:#666; font-size:14px; display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span>${title}</span>
+                        <div class="layout-tools" style="display:flex; gap:2px; align-items:center;">
+                            <button class="mini-btn ${data.layout==='top'?'active':''}" title="Haut" onclick="updateField('${card.id}', '${side}', 'layout', 'top')">⬆️</button>
+                            <button class="mini-btn ${data.layout==='bottom'?'active':''}" title="Bas" onclick="updateField('${card.id}', '${side}', 'layout', 'bottom')">⬇️</button>
+                            <button class="mini-btn ${data.layout==='left'?'active':''}" title="Gauche" onclick="updateField('${card.id}', '${side}', 'layout', 'left')">⬅️</button>
+                            <button class="mini-btn ${data.layout==='right'?'active':''}" title="Droite" onclick="updateField('${card.id}', '${side}', 'layout', 'right')">➡️</button>
+                            <div style="width:1px; height:15px; background:#ccc; margin:0 2px;"></div>
+                            <button class="mini-btn ${data.layout==='bg'?'active':''}" title="Fond / Filigrane" onclick="updateField('${card.id}', '${side}', 'layout', 'bg')">🔲</button>
+                            <button class="mini-btn" title="Ajuster ou Remplir l'image" onclick="toggleImgFit('${card.id}', '${side}')">${data.imgFit === 'cover' ? '🔄 Remplir' : '🔄 Entière'}</button>
+                        </div>
+                    </div>
+                    <div class="controls-row" style="background:#eee; padding:5px; border-radius:5px;">
+                        <button class="mini-btn" title="Gras" onmousedown="event.preventDefault(); execCmd('bold', '${card.id}', '${side}')"><b>G</b></button>
+                        <button class="mini-btn" title="Italique" onmousedown="event.preventDefault(); execCmd('italic', '${card.id}', '${side}')"><i>I</i></button>
+                        <button class="mini-btn" title="Souligné" onmousedown="event.preventDefault(); execCmd('underline', '${card.id}', '${side}')"><u>S</u></button>
+                        <div style="width:1px; background:#ccc; margin:0 5px;"></div>
+                        <button class="mini-btn" title="Insérer Formule Mathématique (LaTeX)" onmousedown="event.preventDefault(); insertMath('${card.id}', '${side}')"><b>∑</b></button>
+                        <button class="mini-btn" style="color:var(--primary);" title="Aide LaTeX" onmousedown="event.preventDefault(); openLatexHelp()"><b>❓</b></button>
+                        <div style="width:1px; background:#ccc; margin:0 5px;"></div>
+                        ${colorsHTML}
+                    </div>
+                    <div class="card-preview ${card.orientation} layout-${data.layout}">${imgHTML}<div class="text-container"><div class="text-wrapper" id="editor_${card.id}_${side}" contenteditable="true" style="color:${data.color};" oninput="autoFitHTML(this.id, '${card.id}', '${side}')">${data.html}</div></div>${drawHTML}${audioPlayIcon}</div>
+                    ${audioControls}
+                    <div class="media-controls" style="display: flex; gap: 5px; width: 100%;">
+                        ${!data.image ? `<label class="file-upload-label" style="flex:1; font-size:11px; padding:5px; text-align:center; box-sizing:border-box;">🖼️ Ajouter une image <input type="file" accept="image/*" onchange="handleImageUpload('${card.id}', '${side}', event)"></label>` : ''}
+                        <button class="success brush-btn" style="flex:1; font-size:11px; padding:5px; background:var(--warning); color:#333;" onclick="openDrawingModal('${card.id}', '${side}')">🖌️ Dessiner / Tampon</button>
+                    </div>
+                    ${imgControls}
+                </div>
+            `;
+        }
+
+        async function exportJSON() {
+            if(deck.length === 0) return alert("Aucun paquet à sauvegarder.");
+            const jsonStr = JSON.stringify(deck, null, 2);
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({ suggestedName: 'mes_flashcards.json', types: [{ description: 'Fichier JSON', accept: {'application/json': ['.json']} }], });
+                    const writable = await handle.createWritable(); await writable.write(jsonStr); await writable.close();
+                } catch (err) { if (err.name !== 'AbortError') fallbackSave(jsonStr); }
+            } else { fallbackSave(jsonStr); }
+        }
+
+        function fallbackSave(jsonStr) {
+            let filename = prompt("Entrez le nom du fichier de sauvegarde :", "mes_flashcards.json"); if (!filename) return; if (!filename.endsWith('.json')) filename += '.json';
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr); const a = document.createElement('a'); a.href = dataStr; a.download = filename; a.click();
+        }
+
+        function loadJSON(event) { const reader = new FileReader(); reader.onload = function(e) { try { deck = JSON.parse(e.target.result); saveState(); initData(); } catch { alert("Fichier invalide."); } }; reader.readAsText(event.target.files[0]); }
+
+        function importCSV(event) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const lines = e.target.result.split('\n');
+                lines.forEach(line => {
+                    const parts = line.split(/;|,/);
+                    if(parts.length >= 2 && (parts[0].trim() || parts[1].trim())) { deck.push(createNewCard(parts[0].trim(), parts[1].trim())); }
+                });
+                if(deck.length > 0) selectedCardId = deck[deck.length - 1].id; saveState(); renderApp(); alert(`${lines.length} cartes importées avec succès !`);
+            };
+            reader.readAsText(event.target.files[0]);
+        }
+
+        function printPDF(mode) {
+            if (deck.length === 0) return alert("Ajoutez des cartes.");
+            const container = document.getElementById('print-container'); container.innerHTML = ''; const CARDS_PER_PAGE = 9;
+            for (let i = 0; i < deck.length; i += CARDS_PER_PAGE) {
+                const chunk = deck.slice(i, i + CARDS_PER_PAGE);
+                let rectoPage = '<div class="print-page">';
+                for(let j=0; j < CARDS_PER_PAGE; j++) { rectoPage += chunk[j] ? createPrintCardHTML(chunk[j], 'recto') : '<div class="print-card" style="border:none;"></div>'; }
+                rectoPage += '</div>'; container.innerHTML += rectoPage;
+                const mirrorMap = [2, 1, 0, 5, 4, 3, 8, 7, 6];
+                let versoPage = '<div class="print-page">';
+                for(let j=0; j < CARDS_PER_PAGE; j++) {
+                    const indexToPrint = (mode === 'mirror') ? mirrorMap[j] : j;
+                    versoPage += chunk[indexToPrint] ? createPrintCardHTML(chunk[indexToPrint], 'verso') : '<div class="print-card" style="border:none;"></div>';
+                }
+                versoPage += '</div>'; container.innerHTML += versoPage;
+            }
+            setTimeout(() => { window.print(); setTimeout(() => { container.innerHTML = ''; }, 1000); }, 100);
+        }
+
+        function createPrintCardHTML(card, side) {
+            const data = card[side];
+            const imgHtml = data.image ? `<div class="img-wrapper"><img src="${data.image}" style="transform: translate(${data.posX}px, ${data.posY}px) scale(${data.zoom}); object-fit: ${data.imgFit || 'contain'}; width:100%; height:100%;"></div>` : '';
+            const drawHtml = data.drawing ? `<img class="drawing-layer" src="${data.drawing}">` : '';
+            const printClass = card.orientation === 'landscape' ? 'landscape-print' : 'portrait-print';
+            return `<div class="print-card ${printClass} layout-${data.layout}">${imgHtml}<div class="text-container"><div class="text-wrapper" style="color: ${data.color}; font-size: ${data.fontSize};">${data.html}</div></div>${drawHtml}</div>`;
+        }
+
+        initData();
+    </script>
+</body>
+</html>
