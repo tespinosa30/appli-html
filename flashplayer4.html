@@ -100,12 +100,13 @@
         .audio-play-icon { position: absolute; bottom: 10px; right: 10px; background: rgba(255, 255, 255, 0.9); border: 2px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; cursor: pointer; font-size: 20px; z-index: 30; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: 0.1s; color: var(--primary); }
         .audio-play-icon:hover { transform: scale(1.15); background: var(--primary); color: white; }
 
-        /* Layouts Editor */
+        /* Layouts */
         .layout-top { flex-direction: column; } .layout-top .img-wrapper, .layout-top .text-container { width: 100%; height: 50%; }
         .layout-bottom { flex-direction: column-reverse; } .layout-bottom .img-wrapper, .layout-bottom .text-container { width: 100%; height: 50%; }
         .layout-left { flex-direction: row; } .layout-left .img-wrapper, .layout-left .text-container { width: 50%; height: 100%; }
         .layout-right { flex-direction: row-reverse; } .layout-right .img-wrapper, .layout-right .text-container { width: 50%; height: 100%; }
         .layout-bg { display: block; } .layout-bg .img-wrapper { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1; } .layout-bg .img-wrapper img { opacity: 0.25; } .layout-bg .text-container { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2; }
+        .layout-full { display: block; } .layout-full .img-wrapper { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1; } .layout-full .img-wrapper img { opacity: 1; } .layout-full .text-container { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2; }
 
         .study-actions { flex-shrink: 0; display: flex; gap: 15px; justify-content: center; width: 100%; padding-bottom: 10px; }
         .study-actions button { font-size: 16px; padding: 15px 25px; display: flex; align-items: center; flex-direction: column; gap: 5px; flex: 1; max-width: 250px; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 8px; border:none; cursor:pointer;}
@@ -297,6 +298,10 @@
                 c.box = Math.max(0, Math.min(boxNum, leitnerBoxes.length - 1));
                 c.timestamp = ts || Date.now();
                 c.successCount = succ || 0;
+                
+                if (!c.recto.layout) c.recto.layout = 'top';
+                if (!c.verso.layout) c.verso.layout = 'top';
+
                 return c;
             });
         }
@@ -510,15 +515,12 @@
             setupEvaluationButtons(currentQueue[currentCardIndex]);
         }
 
-        // --- RENDU EXACT DE LA CARTE (TAILLE NATIVE ÉDITEUR) ---
         function generateCardHTML(card, side) {
             const data = card[side];
             
-            // On utilise exactement la taille de police native de l'éditeur sans artifices.
             let fSize = data.fontSize || "24px";
             if (!isNaN(fSize)) fSize += "px";
 
-            // Si l'image a été manipulée dans l'éditeur, on applique les translations exactes
             const imgHtml = data.image ? `
                 <div class="img-wrapper">
                     <img src="${data.image}" style="transform: translate(${data.posX||0}px,${data.posY||0}px) scale(${data.zoom||1}); object-fit: ${data.imgFit||'contain'}; width:100%; height:100%;">
@@ -526,7 +528,6 @@
             
             const drawHtml = data.drawing ? `<img class="drawing-layer" src="${data.drawing}">` : '';
             
-            // L'icône audio utilise les mêmes translations natives.
             const audioHtml = data.audio ? `
                 <div class="audio-play-icon" 
                      style="transform: translate(${data.audioX || 0}px, ${data.audioY || 0}px);"
@@ -534,7 +535,7 @@
             ` : '';
             
             return `
-                <div class="card-preview ${card.orientation} layout-${data.layout}">
+                <div class="card-preview ${card.orientation} layout-${data.layout || 'top'}">
                     ${imgHtml}
                     <div class="text-container">
                         <div class="text-wrapper" style="color: ${data.color}; font-size: ${fSize};">${data.html}</div>
@@ -554,8 +555,6 @@
             const containerHeight = container.clientHeight;
             
             cards.forEach(card => {
-                // LA BASE DE REFERENCE EST EXACTEMENT CELLE DE L'ÉDITEUR (332x238)
-                // C'est ce qui garantit le "Pixel Perfect" lors du zoom.
                 const isLandscape = card.classList.contains('landscape');
                 const cardWidth = isLandscape ? 332 : 238;
                 const cardHeight = isLandscape ? 238 : 332;
@@ -600,11 +599,12 @@
                 wrapper.classList.add('swipe-down', 'glow-neutral');
             }
 
-            // 2. Attendre que l'animation se termine pour passer à la logique
+            // 2. Attendre que l'animation se termine
             setTimeout(() => {
                 let card = currentQueue[currentCardIndex];
                 const lastIdx = leitnerBoxes.length - 1;
 
+                // Logique de changement de boîte
                 if (currentBoxIndex === 0) {
                     if (action === 'travailler') { card.box = 1; card.successCount = 0; card.timestamp = Date.now(); }
                     else if (action === 'connu') { card.box = lastIdx; card.successCount = 0; card.timestamp = Date.now(); }
@@ -622,15 +622,26 @@
                 
                 currentCardIndex++;
                 
-                // Retirer les animations de façon invisible pour la carte suivante
+                // --- CORRECTION DU BUG FANTÔME ---
+                // On met le bouclier anti-animation
                 wrapper.classList.add('no-transition');
+                
+                // On retire les classes d'animation de sortie
                 wrapper.classList.remove('swipe-correct', 'swipe-wrong', 'swipe-down', 'glow-correct', 'glow-wrong', 'glow-neutral');
-                void wrapper.offsetWidth; // Force le navigateur à appliquer le CSS immédiatement
+                
+                // On retire le flip *PENDANT* que le bouclier est actif ! (La carte revient à l'endroit instantanément et invisiblement)
+                wrapper.classList.remove('is-flipped');
+                
+                // On force le navigateur à appliquer ces changements sur le champ
+                void wrapper.offsetWidth; 
+                
+                // On retire le bouclier pour la suite
                 wrapper.classList.remove('no-transition');
 
+                // Maintenant on peut charger le contenu de la nouvelle carte en toute sécurité
                 loadNewCard();
 
-            }, 400); // 400ms = Durée de l'animation CSS
+            }, 400); // 400ms = Durée exacte de l'animation CSS
         }
 
         // --- UTILITAIRES ---
